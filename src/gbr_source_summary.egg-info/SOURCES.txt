@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/gbr_source_summary/__init__.py
+src/gbr_source_summary/config.py
+src/gbr_source_summary/io.py
+src/gbr_source_summary/metrics.py
+src/gbr_source_summary/naming.py
+src/gbr_source_summary.egg-info/PKG-INFO
+src/gbr_source_summary.egg-info/SOURCES.txt
+src/gbr_source_summary.egg-info/dependency_links.txt
+src/gbr_source_summary.egg-info/requires.txt
+src/gbr_source_summary.egg-info/top_level.txt
+tests/test_metrics.py

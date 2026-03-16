@@ -1,0 +1,32 @@
+Check,Level,Status,Count,Notes
+missing_Source,GBR,PASS,0,
+missing_MetricType,GBR,PASS,0,
+missing_Scenario,GBR,PASS,0,
+missing_Level,GBR,PASS,0,
+missing_Constituent,GBR,PASS,0,
+duplicate_rows,GBR,PASS,0,
+negative_values,GBR,WARN,30,Negative values may be valid for anthropogenic/reduction-type outputs.
+percent_reduction_bounds,GBR,PASS,0,
+missing_value,GBR,PASS,0,
+missing_Source,Region,PASS,0,
+missing_MetricType,Region,PASS,0,
+missing_Scenario,Region,PASS,0,
+missing_Level,Region,PASS,0,
+missing_Region,Region,PASS,0,
+missing_Constituent,Region,PASS,0,
+duplicate_rows,Region,PASS,0,
+negative_values,Region,PASS,0,
+percent_reduction_bounds,Region,WARN,0,No PERCENT_REDUCTION rows.
+missing_value,Region,PASS,0,
+missing_Source,Basin,PASS,0,
+missing_MetricType,Basin,PASS,0,
+missing_Scenario,Basin,PASS,0,
+missing_Level,Basin,PASS,0,
+missing_Region,Basin,PASS,0,
+missing_Basin,Basin,PASS,0,
+missing_Constituent,Basin,PASS,0,
+duplicate_rows,Basin,PASS,0,
+negative_values,Basin,WARN,1276,Negative values may be valid for anthropogenic/reduction-type outputs.
+percent_reduction_bounds,Basin,WARN,5,"Values outside [-100, 100]."
+missing_value,Basin,WARN,1997,Rows with missing numeric Value.
+all_summary_empty,ALL,PASS,0,

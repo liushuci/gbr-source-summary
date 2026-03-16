@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: gbr-source-summary
+Version: 0.1.0
+Summary: Python tools for summarising GBR Source model outputs
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: pandas>=2.0
+Requires-Dist: numpy>=1.24
+Requires-Dist: pytest>=8.0

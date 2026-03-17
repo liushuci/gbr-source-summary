@@ -124,7 +124,7 @@ def apply_units(df: pd.DataFrame, units: str, years: int) -> pd.DataFrame:
     - mixed report-style units: report
     """
     if units == "report":
-        return convert_report_units(df, years=years)
+        return convert_report_card_units(df, years=years)
 
     if units in {"kg", "t", "kt", "t/yr", "kt/yr"}:
         return convert_load_units(df, units=units, years=years)

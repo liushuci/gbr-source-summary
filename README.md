@@ -72,6 +72,24 @@ t/yr = kg / 1000 / model_years
 
 ---
 
+## Basin summary workflow
+
+Generate basin-scale summaries and scenario comparisons:
+
+python scripts/run_basin_summary.py \
+--base-path F:/RC13_RC2023_24_Gold \
+--basin-scale 48 \
+--reporting-units report_card \
+--value-column "LoadToStream (kg)"
+
+Run QA checks:
+
+python scripts/check_basin_outputs.py \
+--folder check_outputs/basin_summary/Manag_Unit_48/report_card \
+--run-label Gold_93_23 \
+--reporting-units report_card
+
+
 ## Repository Structure
 
 

@@ -83,26 +83,33 @@ def convert_flow_units(df: pd.DataFrame, units: str, years: int) -> pd.DataFrame
 
     raise ValueError(f"Unsupported flow units: {units}")
 
-def convert_report_units(df: pd.DataFrame, years: int) -> pd.DataFrame:
+def convert_report_card_units(
+    df: pd.DataFrame,
+    value_column: str,
+    model_years: float,
+) -> pd.DataFrame:
     """
-    Convert a mixed constituent dataframe to GBR report-style units.
-
-    Rules
-    -----
-    - FS   -> kt/yr
-    - Flow -> GL/yr
-    - nutrients -> t/yr
-    - unknown columns unchanged
+    Convert basin long-format load table from total kg over model period
+    to report card annual units:
+    - FS  -> kt/yr
+    - others -> t/yr
     """
     out = df.copy()
 
-    for col in out.columns:
-        if col in SEDIMENT_CONSTITUENTS:
-            out[col] = out[col] / 1_000_000 / years
-        elif col in NUTRIENT_CONSTITUENTS:
-            out[col] = out[col] / 1000 / years
-        elif col in FLOW_CONSTITUENTS:
-            out[col] = out[col] / 1000 / years  # ML -> GL/yr
+    out["Units"] = "t/yr"
+    out.loc[out["Constituent"] == "FS", "Units"] = "kt/yr"
+
+    out[value_column] = pd.to_numeric(out[value_column], errors="coerce").fillna(0.0)
+
+    fs_mask = out["Constituent"] == "FS"
+    other_mask = ~fs_mask
+
+    out.loc[fs_mask, value_column] = (
+        out.loc[fs_mask, value_column] / 1e6 / model_years
+    )
+    out.loc[other_mask, value_column] = (
+        out.loc[other_mask, value_column] / 1e3 / model_years
+    )
 
     return out
 

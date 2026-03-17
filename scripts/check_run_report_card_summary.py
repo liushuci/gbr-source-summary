@@ -23,12 +23,19 @@ def main():
     print("\n=== gbr_summary head ===")
     print(result["gbr_summary"].head())
 
+    print("\n=== qa_summary ===")
+    print(result["qa_summary"].head(20))
+
     print("\n=== region_summary head ===")
     print(result["region_summary"].head())
 
     print("\n=== basin_summary head ===")
     print(result["basin_summary"].head())
 
+
+    print("\n=== qa file ===")
+    print(result["files"]["qa_summary_csv"])
+    
     print("\n=== all_summary rows ===")
     print(len(result["summary"]))
 

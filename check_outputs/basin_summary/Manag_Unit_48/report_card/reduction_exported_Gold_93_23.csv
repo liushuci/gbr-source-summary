@@ -1,0 +1,337 @@
+Region,Basin,BasinScale,Constituent,Reduction,Units
+BM,Baffle,Manag_Unit_48,DIN,-1.1761377057458352e-14,t/yr
+BM,Burnett,Manag_Unit_48,DIN,0.0002391106945293738,t/yr
+BM,Burrum,Manag_Unit_48,DIN,7.275606921128978e-06,t/yr
+BM,Kolan,Manag_Unit_48,DIN,0.00011409769778832934,t/yr
+BM,Mary,Manag_Unit_48,DIN,-1.454016758846895e-13,t/yr
+BU,Belyando,Manag_Unit_48,DIN,-1.475973821649627e-06,t/yr
+BU,Black,Manag_Unit_48,DIN,0.0,t/yr
+BU,Bowen Bogie,Manag_Unit_48,DIN,-1.3033826019862242e-05,t/yr
+BU,Burdekin Delta,Manag_Unit_48,DIN,0.0014612175287829984,t/yr
+BU,Cape Campaspe,Manag_Unit_48,DIN,-1.7007423667060094e-06,t/yr
+BU,Don,Manag_Unit_48,DIN,-5.140018780972847e-13,t/yr
+BU,East Burdekin,Manag_Unit_48,DIN,-2.5852308500293003e-06,t/yr
+BU,Haughton,Manag_Unit_48,DIN,0.0011875452429737114,t/yr
+BU,Ross,Manag_Unit_48,DIN,0.0,t/yr
+BU,Suttor,Manag_Unit_48,DIN,-2.2084433633260405e-06,t/yr
+BU,Upper Burdekin,Manag_Unit_48,DIN,-2.417730847091851e-05,t/yr
+CY,Endeavour,Manag_Unit_48,DIN,0.0,t/yr
+CY,Jacky Jacky,Manag_Unit_48,DIN,0.0,t/yr
+CY,Jeannie,Manag_Unit_48,DIN,0.0,t/yr
+CY,Lockhart,Manag_Unit_48,DIN,0.0,t/yr
+CY,Normanby,Manag_Unit_48,DIN,0.0,t/yr
+CY,Olive Pascoe,Manag_Unit_48,DIN,0.0,t/yr
+CY,Stewart,Manag_Unit_48,DIN,0.0,t/yr
+FI,Boyne,Manag_Unit_48,DIN,0.0,t/yr
+FI,Calliope,Manag_Unit_48,DIN,0.0,t/yr
+FI,Comet,Manag_Unit_48,DIN,0.0,t/yr
+FI,Dawson,Manag_Unit_48,DIN,0.0,t/yr
+FI,Fitzroy,Manag_Unit_48,DIN,0.0,t/yr
+FI,Isaac,Manag_Unit_48,DIN,0.0,t/yr
+FI,Mackenzie,Manag_Unit_48,DIN,0.0,t/yr
+FI,Nogoa,Manag_Unit_48,DIN,0.0,t/yr
+FI,Shoalwater,Manag_Unit_48,DIN,0.0,t/yr
+FI,Styx,Manag_Unit_48,DIN,0.0,t/yr
+FI,Theresa,Manag_Unit_48,DIN,0.0,t/yr
+FI,Water Park,Manag_Unit_48,DIN,0.0,t/yr
+MW,O-Connell,Manag_Unit_48,DIN,2.954581036279175e-05,t/yr
+MW,Pioneer,Manag_Unit_48,DIN,4.664231857337124e-06,t/yr
+MW,Plane,Manag_Unit_48,DIN,6.8453863031642e-05,t/yr
+MW,Proserpine,Manag_Unit_48,DIN,-2.7685784268548257e-05,t/yr
+WT,Barron,Manag_Unit_48,DIN,7.016060601884912e-05,t/yr
+WT,Daintree,Manag_Unit_48,DIN,0.0,t/yr
+WT,Johnstone,Manag_Unit_48,DIN,0.001643696917166623,t/yr
+WT,Lower Herbert,Manag_Unit_48,DIN,0.0003813788068348572,t/yr
+WT,Mossman,Manag_Unit_48,DIN,0.0,t/yr
+WT,Mulgrave-Russell,Manag_Unit_48,DIN,0.0004673190032289161,t/yr
+WT,Murray,Manag_Unit_48,DIN,0.0002853745819086782,t/yr
+WT,Tully,Manag_Unit_48,DIN,0.00033227468890828504,t/yr
+WT,Upper Herbert,Manag_Unit_48,DIN,-2.890738930839613e-07,t/yr
+BM,Baffle,Manag_Unit_48,DIP,1.3030643231104478e-14,t/yr
+BM,Burnett,Manag_Unit_48,DIP,1.9774167488625002e-14,t/yr
+BM,Burrum,Manag_Unit_48,DIP,-2.521242474055422e-16,t/yr
+BM,Kolan,Manag_Unit_48,DIP,-5.2399566167575054e-15,t/yr
+BM,Mary,Manag_Unit_48,DIP,-3.793824513801762e-15,t/yr
+BU,Belyando,Manag_Unit_48,DIP,-2.8288607496425774e-08,t/yr
+BU,Black,Manag_Unit_48,DIP,0.0,t/yr
+BU,Bowen Bogie,Manag_Unit_48,DIP,2.9107753097908546e-09,t/yr
+BU,Burdekin Delta,Manag_Unit_48,DIP,1.257869210273081e-10,t/yr
+BU,Cape Campaspe,Manag_Unit_48,DIP,2.959898218198494e-09,t/yr
+BU,Don,Manag_Unit_48,DIP,0.0,t/yr
+BU,East Burdekin,Manag_Unit_48,DIP,5.430462600486408e-10,t/yr
+BU,Haughton,Manag_Unit_48,DIP,0.0,t/yr
+BU,Ross,Manag_Unit_48,DIP,0.0,t/yr
+BU,Suttor,Manag_Unit_48,DIP,-3.349766541324092e-07,t/yr
+BU,Upper Burdekin,Manag_Unit_48,DIP,3.2021902801678454e-09,t/yr
+CY,Endeavour,Manag_Unit_48,DIP,0.0,t/yr
+CY,Jacky Jacky,Manag_Unit_48,DIP,0.0,t/yr
+CY,Jeannie,Manag_Unit_48,DIP,0.0,t/yr
+CY,Lockhart,Manag_Unit_48,DIP,0.0,t/yr
+CY,Normanby,Manag_Unit_48,DIP,0.0,t/yr
+CY,Olive Pascoe,Manag_Unit_48,DIP,0.0,t/yr
+CY,Stewart,Manag_Unit_48,DIP,0.0,t/yr
+FI,Boyne,Manag_Unit_48,DIP,0.0,t/yr
+FI,Calliope,Manag_Unit_48,DIP,0.0,t/yr
+FI,Comet,Manag_Unit_48,DIP,-8.490465807161247e-09,t/yr
+FI,Dawson,Manag_Unit_48,DIP,0.0002514776263195235,t/yr
+FI,Fitzroy,Manag_Unit_48,DIP,7.49952489836924e-06,t/yr
+FI,Isaac,Manag_Unit_48,DIP,0.00017476140887118276,t/yr
+FI,Mackenzie,Manag_Unit_48,DIP,1.9251065812774236e-05,t/yr
+FI,Nogoa,Manag_Unit_48,DIP,9.055251256162874e-05,t/yr
+FI,Shoalwater,Manag_Unit_48,DIP,0.0,t/yr
+FI,Styx,Manag_Unit_48,DIP,0.0,t/yr
+FI,Theresa,Manag_Unit_48,DIP,3.167869142988948e-05,t/yr
+FI,Water Park,Manag_Unit_48,DIP,0.0,t/yr
+MW,O-Connell,Manag_Unit_48,DIP,0.0,t/yr
+MW,Pioneer,Manag_Unit_48,DIP,0.0,t/yr
+MW,Plane,Manag_Unit_48,DIP,0.0,t/yr
+MW,Proserpine,Manag_Unit_48,DIP,0.0,t/yr
+WT,Barron,Manag_Unit_48,DIP,-2.9605947323337507e-19,t/yr
+WT,Daintree,Manag_Unit_48,DIP,0.0,t/yr
+WT,Johnstone,Manag_Unit_48,DIP,5.287739298299717e-06,t/yr
+WT,Lower Herbert,Manag_Unit_48,DIP,0.0,t/yr
+WT,Mossman,Manag_Unit_48,DIP,0.0,t/yr
+WT,Mulgrave-Russell,Manag_Unit_48,DIP,0.0,t/yr
+WT,Murray,Manag_Unit_48,DIP,0.0,t/yr
+WT,Tully,Manag_Unit_48,DIP,7.107603917096602e-08,t/yr
+WT,Upper Herbert,Manag_Unit_48,DIP,0.0,t/yr
+BM,Baffle,Manag_Unit_48,DON,-1.5658277637461043e-13,t/yr
+BM,Burnett,Manag_Unit_48,DON,1.081881843371472e-13,t/yr
+BM,Burrum,Manag_Unit_48,DON,9.082251987517035e-14,t/yr
+BM,Kolan,Manag_Unit_48,DON,8.187820791742221e-14,t/yr
+BM,Mary,Manag_Unit_48,DON,2.0249141622722769e-13,t/yr
+BU,Belyando,Manag_Unit_48,DON,0.0,t/yr
+BU,Black,Manag_Unit_48,DON,0.0,t/yr
+BU,Bowen Bogie,Manag_Unit_48,DON,0.0,t/yr
+BU,Burdekin Delta,Manag_Unit_48,DON,0.0,t/yr
+BU,Cape Campaspe,Manag_Unit_48,DON,0.0,t/yr
+BU,Don,Manag_Unit_48,DON,0.0,t/yr
+BU,East Burdekin,Manag_Unit_48,DON,0.0,t/yr
+BU,Haughton,Manag_Unit_48,DON,0.0,t/yr
+BU,Ross,Manag_Unit_48,DON,0.0,t/yr
+BU,Suttor,Manag_Unit_48,DON,0.0,t/yr
+BU,Upper Burdekin,Manag_Unit_48,DON,0.0,t/yr
+CY,Endeavour,Manag_Unit_48,DON,0.0,t/yr
+CY,Jacky Jacky,Manag_Unit_48,DON,0.0,t/yr
+CY,Jeannie,Manag_Unit_48,DON,0.0,t/yr
+CY,Lockhart,Manag_Unit_48,DON,0.0,t/yr
+CY,Normanby,Manag_Unit_48,DON,0.0,t/yr
+CY,Olive Pascoe,Manag_Unit_48,DON,0.0,t/yr
+CY,Stewart,Manag_Unit_48,DON,0.0,t/yr
+FI,Boyne,Manag_Unit_48,DON,0.0,t/yr
+FI,Calliope,Manag_Unit_48,DON,0.0,t/yr
+FI,Comet,Manag_Unit_48,DON,0.0,t/yr
+FI,Dawson,Manag_Unit_48,DON,0.0,t/yr
+FI,Fitzroy,Manag_Unit_48,DON,0.0,t/yr
+FI,Isaac,Manag_Unit_48,DON,0.0,t/yr
+FI,Mackenzie,Manag_Unit_48,DON,0.0,t/yr
+FI,Nogoa,Manag_Unit_48,DON,0.0,t/yr
+FI,Shoalwater,Manag_Unit_48,DON,0.0,t/yr
+FI,Styx,Manag_Unit_48,DON,0.0,t/yr
+FI,Theresa,Manag_Unit_48,DON,0.0,t/yr
+FI,Water Park,Manag_Unit_48,DON,0.0,t/yr
+MW,O-Connell,Manag_Unit_48,DON,0.0,t/yr
+MW,Pioneer,Manag_Unit_48,DON,0.0,t/yr
+MW,Plane,Manag_Unit_48,DON,0.0,t/yr
+MW,Proserpine,Manag_Unit_48,DON,0.0,t/yr
+WT,Barron,Manag_Unit_48,DON,5.684341886080802e-18,t/yr
+WT,Daintree,Manag_Unit_48,DON,0.0,t/yr
+WT,Johnstone,Manag_Unit_48,DON,0.0,t/yr
+WT,Lower Herbert,Manag_Unit_48,DON,0.0,t/yr
+WT,Mossman,Manag_Unit_48,DON,0.0,t/yr
+WT,Mulgrave-Russell,Manag_Unit_48,DON,0.0,t/yr
+WT,Murray,Manag_Unit_48,DON,0.0,t/yr
+WT,Tully,Manag_Unit_48,DON,0.0,t/yr
+WT,Upper Herbert,Manag_Unit_48,DON,0.0,t/yr
+BM,Baffle,Manag_Unit_48,DOP,-3.378867556117863e-15,t/yr
+BM,Burnett,Manag_Unit_48,DOP,-3.432276685089164e-15,t/yr
+BM,Burrum,Manag_Unit_48,DOP,2.580010279492247e-15,t/yr
+BM,Kolan,Manag_Unit_48,DOP,-5.1357732881266806e-15,t/yr
+BM,Mary,Manag_Unit_48,DOP,-2.1150488767792315e-14,t/yr
+BU,Belyando,Manag_Unit_48,DOP,-2.9746467261896708e-08,t/yr
+BU,Black,Manag_Unit_48,DOP,0.0,t/yr
+BU,Bowen Bogie,Manag_Unit_48,DOP,1.531035436859914e-09,t/yr
+BU,Burdekin Delta,Manag_Unit_48,DOP,1.1946231932569163e-10,t/yr
+BU,Cape Campaspe,Manag_Unit_48,DOP,4.803211827090574e-09,t/yr
+BU,Don,Manag_Unit_48,DOP,0.0,t/yr
+BU,East Burdekin,Manag_Unit_48,DOP,2.9947225795486546e-10,t/yr
+BU,Haughton,Manag_Unit_48,DOP,0.0,t/yr
+BU,Ross,Manag_Unit_48,DOP,0.0,t/yr
+BU,Suttor,Manag_Unit_48,DOP,-3.3524461455236573e-07,t/yr
+BU,Upper Burdekin,Manag_Unit_48,DOP,4.714335250355362e-09,t/yr
+CY,Endeavour,Manag_Unit_48,DOP,0.0,t/yr
+CY,Jacky Jacky,Manag_Unit_48,DOP,0.0,t/yr
+CY,Jeannie,Manag_Unit_48,DOP,0.0,t/yr
+CY,Lockhart,Manag_Unit_48,DOP,0.0,t/yr
+CY,Normanby,Manag_Unit_48,DOP,0.0,t/yr
+CY,Olive Pascoe,Manag_Unit_48,DOP,0.0,t/yr
+CY,Stewart,Manag_Unit_48,DOP,0.0,t/yr
+FI,Boyne,Manag_Unit_48,DOP,0.0,t/yr
+FI,Calliope,Manag_Unit_48,DOP,0.0,t/yr
+FI,Comet,Manag_Unit_48,DOP,5.365144577614464e-09,t/yr
+FI,Dawson,Manag_Unit_48,DOP,6.286870221890363e-05,t/yr
+FI,Fitzroy,Manag_Unit_48,DOP,1.8770878665429553e-06,t/yr
+FI,Isaac,Manag_Unit_48,DOP,4.368752941654428e-05,t/yr
+FI,Mackenzie,Manag_Unit_48,DOP,4.81403570495497e-06,t/yr
+FI,Nogoa,Manag_Unit_48,DOP,2.264010994053223e-05,t/yr
+FI,Shoalwater,Manag_Unit_48,DOP,0.0,t/yr
+FI,Styx,Manag_Unit_48,DOP,0.0,t/yr
+FI,Theresa,Manag_Unit_48,DOP,7.910254564924913e-06,t/yr
+FI,Water Park,Manag_Unit_48,DOP,0.0,t/yr
+MW,O-Connell,Manag_Unit_48,DOP,0.0,t/yr
+MW,Pioneer,Manag_Unit_48,DOP,0.0,t/yr
+MW,Plane,Manag_Unit_48,DOP,0.0,t/yr
+MW,Proserpine,Manag_Unit_48,DOP,0.0,t/yr
+WT,Barron,Manag_Unit_48,DOP,5.921189464667501e-19,t/yr
+WT,Daintree,Manag_Unit_48,DOP,0.0,t/yr
+WT,Johnstone,Manag_Unit_48,DOP,6.430229703890689e-06,t/yr
+WT,Lower Herbert,Manag_Unit_48,DOP,0.0,t/yr
+WT,Mossman,Manag_Unit_48,DOP,0.0,t/yr
+WT,Mulgrave-Russell,Manag_Unit_48,DOP,0.0,t/yr
+WT,Murray,Manag_Unit_48,DOP,0.0,t/yr
+WT,Tully,Manag_Unit_48,DOP,2.3692013057470262e-07,t/yr
+WT,Upper Herbert,Manag_Unit_48,DOP,0.0,t/yr
+BM,Baffle,Manag_Unit_48,FS,2.2186221219300252e-10,kt/yr
+BM,Burnett,Manag_Unit_48,FS,1.129489679346515e-08,kt/yr
+BM,Burrum,Manag_Unit_48,FS,1.7263568383108682e-09,kt/yr
+BM,Kolan,Manag_Unit_48,FS,2.7319201048844852e-09,kt/yr
+BM,Mary,Manag_Unit_48,FS,5.073890446991621e-07,kt/yr
+BU,Belyando,Manag_Unit_48,FS,-2.81584712013346e-10,kt/yr
+BU,Black,Manag_Unit_48,FS,1.3642569661461341e-11,kt/yr
+BU,Bowen Bogie,Manag_Unit_48,FS,9.34865876766806e-07,kt/yr
+BU,Burdekin Delta,Manag_Unit_48,FS,2.2488390621836153e-08,kt/yr
+BU,Cape Campaspe,Manag_Unit_48,FS,-7.61087070948463e-10,kt/yr
+BU,Don,Manag_Unit_48,FS,3.537117126591056e-08,kt/yr
+BU,East Burdekin,Manag_Unit_48,FS,1.003916501902817e-07,kt/yr
+BU,Haughton,Manag_Unit_48,FS,5.806140376075935e-08,kt/yr
+BU,Ross,Manag_Unit_48,FS,1.9006260917052486e-09,kt/yr
+BU,Suttor,Manag_Unit_48,FS,2.834840937096317e-09,kt/yr
+BU,Upper Burdekin,Manag_Unit_48,FS,1.1609114351435134e-07,kt/yr
+CY,Endeavour,Manag_Unit_48,FS,1.7257613628349588e-08,kt/yr
+CY,Jacky Jacky,Manag_Unit_48,FS,0.0,kt/yr
+CY,Jeannie,Manag_Unit_48,FS,0.0,kt/yr
+CY,Lockhart,Manag_Unit_48,FS,0.0,kt/yr
+CY,Normanby,Manag_Unit_48,FS,9.71561692558017e-10,kt/yr
+CY,Olive Pascoe,Manag_Unit_48,FS,0.0,kt/yr
+CY,Stewart,Manag_Unit_48,FS,0.0,kt/yr
+FI,Boyne,Manag_Unit_48,FS,2.573160498571999e-12,kt/yr
+FI,Calliope,Manag_Unit_48,FS,1.5693103043470793e-08,kt/yr
+FI,Comet,Manag_Unit_48,FS,-6.946621755196247e-09,kt/yr
+FI,Dawson,Manag_Unit_48,FS,-1.9888646399236145e-08,kt/yr
+FI,Fitzroy,Manag_Unit_48,FS,1.2733658139888726e-06,kt/yr
+FI,Isaac,Manag_Unit_48,FS,1.6702629896591738e-08,kt/yr
+FI,Mackenzie,Manag_Unit_48,FS,-1.9362989398839164e-08,kt/yr
+FI,Nogoa,Manag_Unit_48,FS,7.911621963064164e-09,kt/yr
+FI,Shoalwater,Manag_Unit_48,FS,1.3046725181690516e-16,kt/yr
+FI,Styx,Manag_Unit_48,FS,4.845038192371476e-10,kt/yr
+FI,Theresa,Manag_Unit_48,FS,3.614443240664495e-08,kt/yr
+FI,Water Park,Manag_Unit_48,FS,1.0740594037391323e-11,kt/yr
+MW,O-Connell,Manag_Unit_48,FS,2.2099246730454164e-07,kt/yr
+MW,Pioneer,Manag_Unit_48,FS,9.231002204435393e-09,kt/yr
+MW,Plane,Manag_Unit_48,FS,4.500073483449778e-09,kt/yr
+MW,Proserpine,Manag_Unit_48,FS,1.10267480657555e-08,kt/yr
+WT,Barron,Manag_Unit_48,FS,3.687527011303852e-11,kt/yr
+WT,Daintree,Manag_Unit_48,FS,0.0,kt/yr
+WT,Johnstone,Manag_Unit_48,FS,5.919782304440938e-09,kt/yr
+WT,Lower Herbert,Manag_Unit_48,FS,8.538276385228301e-08,kt/yr
+WT,Mossman,Manag_Unit_48,FS,0.0,kt/yr
+WT,Mulgrave-Russell,Manag_Unit_48,FS,1.5429571034185112e-09,kt/yr
+WT,Murray,Manag_Unit_48,FS,1.997987635436497e-09,kt/yr
+WT,Tully,Manag_Unit_48,FS,6.105139516217643e-10,kt/yr
+WT,Upper Herbert,Manag_Unit_48,FS,-3.663628696787668e-09,kt/yr
+BM,Baffle,Manag_Unit_48,PN,5.701499412476588e-07,t/yr
+BM,Burnett,Manag_Unit_48,PN,9.758199377639964e-05,t/yr
+BM,Burrum,Manag_Unit_48,PN,1.259972944164455e-05,t/yr
+BM,Kolan,Manag_Unit_48,PN,3.479379856949644e-05,t/yr
+BM,Mary,Manag_Unit_48,PN,0.0008312741282378018,t/yr
+BU,Belyando,Manag_Unit_48,PN,-5.714071644813856e-07,t/yr
+BU,Black,Manag_Unit_48,PN,1.3246092487169865e-07,t/yr
+BU,Bowen Bogie,Manag_Unit_48,PN,0.0014535538841543786,t/yr
+BU,Burdekin Delta,Manag_Unit_48,PN,0.00011353778567173218,t/yr
+BU,Cape Campaspe,Manag_Unit_48,PN,-3.196575072535287e-06,t/yr
+BU,Don,Manag_Unit_48,PN,0.00012609341383797528,t/yr
+BU,East Burdekin,Manag_Unit_48,PN,0.0001547227404345752,t/yr
+BU,Haughton,Manag_Unit_48,PN,0.0002904325768134527,t/yr
+BU,Ross,Manag_Unit_48,PN,2.291951942115607e-06,t/yr
+BU,Suttor,Manag_Unit_48,PN,5.305850521518352e-06,t/yr
+BU,Upper Burdekin,Manag_Unit_48,PN,0.00030403777893955067,t/yr
+CY,Endeavour,Manag_Unit_48,PN,1.2642901186141367e-05,t/yr
+CY,Jacky Jacky,Manag_Unit_48,PN,0.0,t/yr
+CY,Jeannie,Manag_Unit_48,PN,0.0,t/yr
+CY,Lockhart,Manag_Unit_48,PN,0.0,t/yr
+CY,Normanby,Manag_Unit_48,PN,1.706907385522527e-06,t/yr
+CY,Olive Pascoe,Manag_Unit_48,PN,0.0,t/yr
+CY,Stewart,Manag_Unit_48,PN,0.0,t/yr
+FI,Boyne,Manag_Unit_48,PN,1.949907643480723e-08,t/yr
+FI,Calliope,Manag_Unit_48,PN,7.839502816774531e-05,t/yr
+FI,Comet,Manag_Unit_48,PN,1.7973648948482908e-05,t/yr
+FI,Dawson,Manag_Unit_48,PN,6.853907960026693e-05,t/yr
+FI,Fitzroy,Manag_Unit_48,PN,0.002612542927581641,t/yr
+FI,Isaac,Manag_Unit_48,PN,0.00018476823984675168,t/yr
+FI,Mackenzie,Manag_Unit_48,PN,3.4260465840797375e-06,t/yr
+FI,Nogoa,Manag_Unit_48,PN,5.495439511587155e-05,t/yr
+FI,Shoalwater,Manag_Unit_48,PN,6.749161229890888e-13,t/yr
+FI,Styx,Manag_Unit_48,PN,2.9992522782540236e-06,t/yr
+FI,Theresa,Manag_Unit_48,PN,0.0002053026294016353,t/yr
+FI,Water Park,Manag_Unit_48,PN,3.610117161893338e-08,t/yr
+MW,O-Connell,Manag_Unit_48,PN,0.0005790269493105674,t/yr
+MW,Pioneer,Manag_Unit_48,PN,9.910823719815577e-05,t/yr
+MW,Plane,Manag_Unit_48,PN,0.0001319234363675567,t/yr
+MW,Proserpine,Manag_Unit_48,PN,1.9885438787953546e-05,t/yr
+WT,Barron,Manag_Unit_48,PN,1.786750957952184e-07,t/yr
+WT,Daintree,Manag_Unit_48,PN,0.0,t/yr
+WT,Johnstone,Manag_Unit_48,PN,4.920717619083158e-05,t/yr
+WT,Lower Herbert,Manag_Unit_48,PN,0.0002377884910504842,t/yr
+WT,Mossman,Manag_Unit_48,PN,0.0,t/yr
+WT,Mulgrave-Russell,Manag_Unit_48,PN,9.29463133502774e-06,t/yr
+WT,Murray,Manag_Unit_48,PN,2.0033491044440172e-05,t/yr
+WT,Tully,Manag_Unit_48,PN,6.067277249157617e-06,t/yr
+WT,Upper Herbert,Manag_Unit_48,PN,-5.2685096696185e-06,t/yr
+BM,Baffle,Manag_Unit_48,PP,1.5195360566835347e-07,t/yr
+BM,Burnett,Manag_Unit_48,PP,2.6049860288122773e-05,t/yr
+BM,Burrum,Manag_Unit_48,PP,6.522410498533185e-06,t/yr
+BM,Kolan,Manag_Unit_48,PP,1.0937868599853573e-05,t/yr
+BM,Mary,Manag_Unit_48,PP,0.0003639450716794897,t/yr
+BU,Belyando,Manag_Unit_48,PP,-1.2810264363498192e-06,t/yr
+BU,Black,Manag_Unit_48,PP,5.42796663528596e-08,t/yr
+BU,Bowen Bogie,Manag_Unit_48,PP,0.0012323502593118217,t/yr
+BU,Burdekin Delta,Manag_Unit_48,PP,3.2464201620195846e-05,t/yr
+BU,Cape Campaspe,Manag_Unit_48,PP,-2.2862512377708792e-06,t/yr
+BU,Don,Manag_Unit_48,PP,5.269281513279177e-05,t/yr
+BU,East Burdekin,Manag_Unit_48,PP,0.00011125840794020122,t/yr
+BU,Haughton,Manag_Unit_48,PP,8.878136166772588e-05,t/yr
+BU,Ross,Manag_Unit_48,PP,1.0205772171602233e-06,t/yr
+BU,Suttor,Manag_Unit_48,PP,1.5586156470108157e-06,t/yr
+BU,Upper Burdekin,Manag_Unit_48,PP,0.00023576398762936983,t/yr
+CY,Endeavour,Manag_Unit_48,PP,5.96373929022036e-06,t/yr
+CY,Jacky Jacky,Manag_Unit_48,PP,0.0,t/yr
+CY,Jeannie,Manag_Unit_48,PP,0.0,t/yr
+CY,Lockhart,Manag_Unit_48,PP,0.0,t/yr
+CY,Normanby,Manag_Unit_48,PP,6.197391216005599e-07,t/yr
+CY,Olive Pascoe,Manag_Unit_48,PP,0.0,t/yr
+CY,Stewart,Manag_Unit_48,PP,0.0,t/yr
+FI,Boyne,Manag_Unit_48,PP,4.920258415334426e-09,t/yr
+FI,Calliope,Manag_Unit_48,PP,3.666510125017647e-05,t/yr
+FI,Comet,Manag_Unit_48,PP,1.950665122658677e-05,t/yr
+FI,Dawson,Manag_Unit_48,PP,6.260286199251747e-05,t/yr
+FI,Fitzroy,Manag_Unit_48,PP,0.0011945536376943568,t/yr
+FI,Isaac,Manag_Unit_48,PP,3.8054326034625775e-05,t/yr
+FI,Mackenzie,Manag_Unit_48,PP,-4.569867782033535e-06,t/yr
+FI,Nogoa,Manag_Unit_48,PP,1.9474353134453537e-05,t/yr
+FI,Shoalwater,Manag_Unit_48,PP,4.116984086977027e-13,t/yr
+FI,Styx,Manag_Unit_48,PP,8.130761151790012e-07,t/yr
+FI,Theresa,Manag_Unit_48,PP,4.919143683505093e-05,t/yr
+FI,Water Park,Manag_Unit_48,PP,1.5866570806425765e-08,t/yr
+MW,O-Connell,Manag_Unit_48,PP,0.00014528011530556454,t/yr
+MW,Pioneer,Manag_Unit_48,PP,9.368534053969787e-06,t/yr
+MW,Plane,Manag_Unit_48,PP,7.962351950121634e-06,t/yr
+MW,Proserpine,Manag_Unit_48,PP,1.5397205575943928e-05,t/yr
+WT,Barron,Manag_Unit_48,PP,4.916850103550511e-08,t/yr
+WT,Daintree,Manag_Unit_48,PP,0.0,t/yr
+WT,Johnstone,Manag_Unit_48,PP,1.4286414926410391e-05,t/yr
+WT,Lower Herbert,Manag_Unit_48,PP,7.033380217717753e-05,t/yr
+WT,Mossman,Manag_Unit_48,PP,0.0,t/yr
+WT,Mulgrave-Russell,Manag_Unit_48,PP,8.917583676624948e-07,t/yr
+WT,Murray,Manag_Unit_48,PP,3.059451380077742e-06,t/yr
+WT,Tully,Manag_Unit_48,PP,1.8223585569790165e-06,t/yr
+WT,Upper Herbert,Manag_Unit_48,PP,-1.541980794485198e-06,t/yr

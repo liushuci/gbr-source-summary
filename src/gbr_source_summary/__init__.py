@@ -83,6 +83,16 @@ from .workflows_process import (
 )
 from .report_card_summary import run_report_card_summary
 
+
+from .workflows_basin import (
+    build_basin_export_summaries,
+    build_basin_scenario_comparison,
+)
+
+
+from .load_basin_lookup import load_basin_lookup
+
+
 __all__ = [
     "GBRConfig",
     "resolve_regions",
@@ -135,4 +145,9 @@ __all__ = [
     "run_process_report",
     "run_all_gbr_process_reports",
     "run_report_card_summary",
+
+    
+    "build_basin_export_summaries",
+    "build_basin_scenario_comparison",
+    "load_basin_lookup",
 ]

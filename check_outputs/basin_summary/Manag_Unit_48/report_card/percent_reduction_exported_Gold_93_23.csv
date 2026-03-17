@@ -1,0 +1,337 @@
+Region,Basin,BasinScale,Constituent,PercentReduction,Units
+BM,Baffle,Manag_Unit_48,DIN,-1.3615185792042071e-09,%
+BM,Burnett,Manag_Unit_48,DIN,5.594882787161158,%
+BM,Burrum,Manag_Unit_48,DIN,0.5100946182687628,%
+BM,Kolan,Manag_Unit_48,DIN,5.630761074455309,%
+BM,Mary,Manag_Unit_48,DIN,-2.1462251316681643e-09,%
+BU,Belyando,Manag_Unit_48,DIN,-12.787304294156199,%
+BU,Black,Manag_Unit_48,DIN,0.0,%
+BU,Bowen Bogie,Manag_Unit_48,DIN,7.17426218056673,%
+BU,Burdekin Delta,Manag_Unit_48,DIN,10.557485438581212,%
+BU,Cape Campaspe,Manag_Unit_48,DIN,6.885485097978089,%
+BU,Don,Manag_Unit_48,DIN,-3.898923819772528e-08,%
+BU,East Burdekin,Manag_Unit_48,DIN,-0.44953623736438425,%
+BU,Haughton,Manag_Unit_48,DIN,11.608515505623485,%
+BU,Ross,Manag_Unit_48,DIN,0.0,%
+BU,Suttor,Manag_Unit_48,DIN,-0.9950851576226655,%
+BU,Upper Burdekin,Manag_Unit_48,DIN,9.608943277374646,%
+CY,Endeavour,Manag_Unit_48,DIN,0.0,%
+CY,Jacky Jacky,Manag_Unit_48,DIN,0.0,%
+CY,Jeannie,Manag_Unit_48,DIN,0.0,%
+CY,Lockhart,Manag_Unit_48,DIN,0.0,%
+CY,Normanby,Manag_Unit_48,DIN,0.0,%
+CY,Olive Pascoe,Manag_Unit_48,DIN,0.0,%
+CY,Stewart,Manag_Unit_48,DIN,0.0,%
+FI,Boyne,Manag_Unit_48,DIN,0.0,%
+FI,Calliope,Manag_Unit_48,DIN,0.0,%
+FI,Comet,Manag_Unit_48,DIN,0.0,%
+FI,Dawson,Manag_Unit_48,DIN,0.0,%
+FI,Fitzroy,Manag_Unit_48,DIN,0.0,%
+FI,Isaac,Manag_Unit_48,DIN,0.0,%
+FI,Mackenzie,Manag_Unit_48,DIN,0.0,%
+FI,Nogoa,Manag_Unit_48,DIN,0.0,%
+FI,Shoalwater,Manag_Unit_48,DIN,0.0,%
+FI,Styx,Manag_Unit_48,DIN,0.0,%
+FI,Theresa,Manag_Unit_48,DIN,0.0,%
+FI,Water Park,Manag_Unit_48,DIN,0.0,%
+MW,O-Connell,Manag_Unit_48,DIN,1.1610518629054445,%
+MW,Pioneer,Manag_Unit_48,DIN,0.08851927401937329,%
+MW,Plane,Manag_Unit_48,DIN,1.4256786872388307,%
+MW,Proserpine,Manag_Unit_48,DIN,-0.823554679841049,%
+WT,Barron,Manag_Unit_48,DIN,2.5511970495759173,%
+WT,Daintree,Manag_Unit_48,DIN,0.0,%
+WT,Johnstone,Manag_Unit_48,DIN,6.8847697219828765,%
+WT,Lower Herbert,Manag_Unit_48,DIN,1.345755069433849,%
+WT,Mossman,Manag_Unit_48,DIN,0.0,%
+WT,Mulgrave-Russell,Manag_Unit_48,DIN,3.500651026550218,%
+WT,Murray,Manag_Unit_48,DIN,3.7731148571246425,%
+WT,Tully,Manag_Unit_48,DIN,2.1099955364929794,%
+WT,Upper Herbert,Manag_Unit_48,DIN,-0.00951405010164074,%
+BM,Baffle,Manag_Unit_48,DIP,2.124243730341792e-08,%
+BM,Burnett,Manag_Unit_48,DIP,4.50452316630401e-09,%
+BM,Burrum,Manag_Unit_48,DIP,-1.1740615276585028e-10,%
+BM,Kolan,Manag_Unit_48,DIP,-4.370210671050467e-09,%
+BM,Mary,Manag_Unit_48,DIP,-5.053169448741648e-10,%
+BU,Belyando,Manag_Unit_48,DIP,-0.28273744158163905,%
+BU,Black,Manag_Unit_48,DIP,0.0,%
+BU,Bowen Bogie,Manag_Unit_48,DIP,0.021956029519410294,%
+BU,Burdekin Delta,Manag_Unit_48,DIP,1.2685121595767206e-05,%
+BU,Cape Campaspe,Manag_Unit_48,DIP,0.0026908480311002795,%
+BU,Don,Manag_Unit_48,DIP,0.0,%
+BU,East Burdekin,Manag_Unit_48,DIP,0.0005761502080825271,%
+BU,Haughton,Manag_Unit_48,DIP,0.0,%
+BU,Ross,Manag_Unit_48,DIP,0.0,%
+BU,Suttor,Manag_Unit_48,DIP,-0.1738207667377569,%
+BU,Upper Burdekin,Manag_Unit_48,DIP,0.0012388051911326645,%
+CY,Endeavour,Manag_Unit_48,DIP,0.0,%
+CY,Jacky Jacky,Manag_Unit_48,DIP,0.0,%
+CY,Jeannie,Manag_Unit_48,DIP,0.0,%
+CY,Lockhart,Manag_Unit_48,DIP,0.0,%
+CY,Normanby,Manag_Unit_48,DIP,0.0,%
+CY,Olive Pascoe,Manag_Unit_48,DIP,0.0,%
+CY,Stewart,Manag_Unit_48,DIP,0.0,%
+FI,Boyne,Manag_Unit_48,DIP,0.0,%
+FI,Calliope,Manag_Unit_48,DIP,0.0,%
+FI,Comet,Manag_Unit_48,DIP,-0.000664283744505295,%
+FI,Dawson,Manag_Unit_48,DIP,5.312065590504628,%
+FI,Fitzroy,Manag_Unit_48,DIP,0.29078443231451273,%
+FI,Isaac,Manag_Unit_48,DIP,41.856456731433376,%
+FI,Mackenzie,Manag_Unit_48,DIP,6.396301894503748,%
+FI,Nogoa,Manag_Unit_48,DIP,19.740457158074925,%
+FI,Shoalwater,Manag_Unit_48,DIP,0.0,%
+FI,Styx,Manag_Unit_48,DIP,0.0,%
+FI,Theresa,Manag_Unit_48,DIP,11.087095012962598,%
+FI,Water Park,Manag_Unit_48,DIP,0.0,%
+MW,O-Connell,Manag_Unit_48,DIP,0.0,%
+MW,Pioneer,Manag_Unit_48,DIP,0.0,%
+MW,Plane,Manag_Unit_48,DIP,0.0,%
+MW,Proserpine,Manag_Unit_48,DIP,0.0,%
+WT,Barron,Manag_Unit_48,DIP,-1.0485572117428876e-13,%
+WT,Daintree,Manag_Unit_48,DIP,0.0,%
+WT,Johnstone,Manag_Unit_48,DIP,0.2661583619571212,%
+WT,Lower Herbert,Manag_Unit_48,DIP,0.0,%
+WT,Mossman,Manag_Unit_48,DIP,0.0,%
+WT,Mulgrave-Russell,Manag_Unit_48,DIP,0.0,%
+WT,Murray,Manag_Unit_48,DIP,0.0,%
+WT,Tully,Manag_Unit_48,DIP,0.012274980992689742,%
+WT,Upper Herbert,Manag_Unit_48,DIP,0.0,%
+BM,Baffle,Manag_Unit_48,DON,-2.9127165463414145e-09,%
+BM,Burnett,Manag_Unit_48,DON,1.7776344585540103e-09,%
+BM,Burrum,Manag_Unit_48,DON,3.963068054090815e-09,%
+BM,Kolan,Manag_Unit_48,DON,2.9155668423943654e-09,%
+BM,Mary,Manag_Unit_48,DON,1.5705059189222248e-09,%
+BU,Belyando,Manag_Unit_48,DON,-0.0,%
+BU,Black,Manag_Unit_48,DON,0.0,%
+BU,Bowen Bogie,Manag_Unit_48,DON,0.0,%
+BU,Burdekin Delta,Manag_Unit_48,DON,0.0,%
+BU,Cape Campaspe,Manag_Unit_48,DON,0.0,%
+BU,Don,Manag_Unit_48,DON,0.0,%
+BU,East Burdekin,Manag_Unit_48,DON,0.0,%
+BU,Haughton,Manag_Unit_48,DON,0.0,%
+BU,Ross,Manag_Unit_48,DON,0.0,%
+BU,Suttor,Manag_Unit_48,DON,-0.0,%
+BU,Upper Burdekin,Manag_Unit_48,DON,0.0,%
+CY,Endeavour,Manag_Unit_48,DON,0.0,%
+CY,Jacky Jacky,Manag_Unit_48,DON,0.0,%
+CY,Jeannie,Manag_Unit_48,DON,0.0,%
+CY,Lockhart,Manag_Unit_48,DON,0.0,%
+CY,Normanby,Manag_Unit_48,DON,0.0,%
+CY,Olive Pascoe,Manag_Unit_48,DON,0.0,%
+CY,Stewart,Manag_Unit_48,DON,0.0,%
+FI,Boyne,Manag_Unit_48,DON,0.0,%
+FI,Calliope,Manag_Unit_48,DON,0.0,%
+FI,Comet,Manag_Unit_48,DON,0.0,%
+FI,Dawson,Manag_Unit_48,DON,0.0,%
+FI,Fitzroy,Manag_Unit_48,DON,0.0,%
+FI,Isaac,Manag_Unit_48,DON,0.0,%
+FI,Mackenzie,Manag_Unit_48,DON,0.0,%
+FI,Nogoa,Manag_Unit_48,DON,0.0,%
+FI,Shoalwater,Manag_Unit_48,DON,0.0,%
+FI,Styx,Manag_Unit_48,DON,0.0,%
+FI,Theresa,Manag_Unit_48,DON,0.0,%
+FI,Water Park,Manag_Unit_48,DON,0.0,%
+MW,O-Connell,Manag_Unit_48,DON,0.0,%
+MW,Pioneer,Manag_Unit_48,DON,0.0,%
+MW,Plane,Manag_Unit_48,DON,0.0,%
+MW,Proserpine,Manag_Unit_48,DON,0.0,%
+WT,Barron,Manag_Unit_48,DON,1.8337553461698587e-13,%
+WT,Daintree,Manag_Unit_48,DON,0.0,%
+WT,Johnstone,Manag_Unit_48,DON,0.0,%
+WT,Lower Herbert,Manag_Unit_48,DON,0.0,%
+WT,Mossman,Manag_Unit_48,DON,0.0,%
+WT,Mulgrave-Russell,Manag_Unit_48,DON,0.0,%
+WT,Murray,Manag_Unit_48,DON,0.0,%
+WT,Tully,Manag_Unit_48,DON,0.0,%
+WT,Upper Herbert,Manag_Unit_48,DON,0.0,%
+BM,Baffle,Manag_Unit_48,DOP,-2.805384626919852e-09,%
+BM,Burnett,Manag_Unit_48,DOP,-1.5771588270948605e-09,%
+BM,Burrum,Manag_Unit_48,DOP,3.1549209399018395e-09,%
+BM,Kolan,Manag_Unit_48,DOP,-5.420559538859839e-09,%
+BM,Mary,Manag_Unit_48,DOP,-7.431025028365133e-09,%
+BU,Belyando,Manag_Unit_48,DOP,-0.23373779851073853,%
+BU,Black,Manag_Unit_48,DOP,0.0,%
+BU,Bowen Bogie,Manag_Unit_48,DOP,0.017478916383729972,%
+BU,Burdekin Delta,Manag_Unit_48,DOP,4.207221977307841e-05,%
+BU,Cape Campaspe,Manag_Unit_48,DOP,0.00447692058368259,%
+BU,Don,Manag_Unit_48,DOP,0.0,%
+BU,East Burdekin,Manag_Unit_48,DOP,0.000535956919654888,%
+BU,Haughton,Manag_Unit_48,DOP,0.0,%
+BU,Ross,Manag_Unit_48,DOP,0.0,%
+BU,Suttor,Manag_Unit_48,DOP,-0.16000489732849163,%
+BU,Upper Burdekin,Manag_Unit_48,DOP,0.001988022747689981,%
+CY,Endeavour,Manag_Unit_48,DOP,0.0,%
+CY,Jacky Jacky,Manag_Unit_48,DOP,0.0,%
+CY,Jeannie,Manag_Unit_48,DOP,0.0,%
+CY,Lockhart,Manag_Unit_48,DOP,0.0,%
+CY,Normanby,Manag_Unit_48,DOP,0.0,%
+CY,Olive Pascoe,Manag_Unit_48,DOP,0.0,%
+CY,Stewart,Manag_Unit_48,DOP,0.0,%
+FI,Boyne,Manag_Unit_48,DOP,0.0,%
+FI,Calliope,Manag_Unit_48,DOP,0.0,%
+FI,Comet,Manag_Unit_48,DOP,0.001585094617167404,%
+FI,Dawson,Manag_Unit_48,DOP,4.947983205978615,%
+FI,Fitzroy,Manag_Unit_48,DOP,0.3245283182597205,%
+FI,Isaac,Manag_Unit_48,DOP,26.52009953841358,%
+FI,Mackenzie,Manag_Unit_48,DOP,5.538773909798788,%
+FI,Nogoa,Manag_Unit_48,DOP,19.405901842660526,%
+FI,Shoalwater,Manag_Unit_48,DOP,0.0,%
+FI,Styx,Manag_Unit_48,DOP,0.0,%
+FI,Theresa,Manag_Unit_48,DOP,10.06566017710683,%
+FI,Water Park,Manag_Unit_48,DOP,0.0,%
+MW,O-Connell,Manag_Unit_48,DOP,0.0,%
+MW,Pioneer,Manag_Unit_48,DOP,0.0,%
+MW,Plane,Manag_Unit_48,DOP,0.0,%
+MW,Proserpine,Manag_Unit_48,DOP,0.0,%
+WT,Barron,Manag_Unit_48,DOP,2.701177632545316e-13,%
+WT,Daintree,Manag_Unit_48,DOP,0.0,%
+WT,Johnstone,Manag_Unit_48,DOP,0.4453200226032404,%
+WT,Lower Herbert,Manag_Unit_48,DOP,0.0,%
+WT,Mossman,Manag_Unit_48,DOP,0.0,%
+WT,Mulgrave-Russell,Manag_Unit_48,DOP,0.0,%
+WT,Murray,Manag_Unit_48,DOP,0.0,%
+WT,Tully,Manag_Unit_48,DOP,0.02388119413328874,%
+WT,Upper Herbert,Manag_Unit_48,DOP,0.0,%
+BM,Baffle,Manag_Unit_48,FS,0.03791998474822032,%
+BM,Burnett,Manag_Unit_48,FS,0.17155676456948385,%
+BM,Burrum,Manag_Unit_48,FS,0.6571860237955234,%
+BM,Kolan,Manag_Unit_48,FS,0.24429140926793225,%
+BM,Mary,Manag_Unit_48,FS,6.796136741169962,%
+BU,Belyando,Manag_Unit_48,FS,-0.036122901185234646,%
+BU,Black,Manag_Unit_48,FS,0.0015988819486283292,%
+BU,Bowen Bogie,Manag_Unit_48,FS,1.885254372095477,%
+BU,Burdekin Delta,Manag_Unit_48,FS,2.6290476348826393,%
+BU,Cape Campaspe,Manag_Unit_48,FS,-0.05310010743106156,%
+BU,Don,Manag_Unit_48,FS,0.8285687892328111,%
+BU,East Burdekin,Manag_Unit_48,FS,3.2817775729906002,%
+BU,Haughton,Manag_Unit_48,FS,2.1808644936553843,%
+BU,Ross,Manag_Unit_48,FS,0.2306426744386622,%
+BU,Suttor,Manag_Unit_48,FS,0.2885739767936666,%
+BU,Upper Burdekin,Manag_Unit_48,FS,0.360483148743933,%
+CY,Endeavour,Manag_Unit_48,FS,1.4907615026027092,%
+CY,Jacky Jacky,Manag_Unit_48,FS,0.0,%
+CY,Jeannie,Manag_Unit_48,FS,0.0,%
+CY,Lockhart,Manag_Unit_48,FS,0.0,%
+CY,Normanby,Manag_Unit_48,FS,0.03563026262303594,%
+CY,Olive Pascoe,Manag_Unit_48,FS,0.0,%
+CY,Stewart,Manag_Unit_48,FS,0.0,%
+FI,Boyne,Manag_Unit_48,FS,0.00159029359892435,%
+FI,Calliope,Manag_Unit_48,FS,1.6566543421419622,%
+FI,Comet,Manag_Unit_48,FS,-0.14451003356140468,%
+FI,Dawson,Manag_Unit_48,FS,-0.15575544890025222,%
+FI,Fitzroy,Manag_Unit_48,FS,20.436427496327585,%
+FI,Isaac,Manag_Unit_48,FS,0.25493713592827105,%
+FI,Mackenzie,Manag_Unit_48,FS,-0.4055222896689915,%
+FI,Nogoa,Manag_Unit_48,FS,0.7581820980907491,%
+FI,Shoalwater,Manag_Unit_48,FS,1.6405573173977604e-08,%
+FI,Styx,Manag_Unit_48,FS,0.028600707865827642,%
+FI,Theresa,Manag_Unit_48,FS,2.282769983154616,%
+FI,Water Park,Manag_Unit_48,FS,0.008196826365367565,%
+MW,O-Connell,Manag_Unit_48,FS,3.7515466014034713,%
+MW,Pioneer,Manag_Unit_48,FS,0.37598920199557156,%
+MW,Plane,Manag_Unit_48,FS,0.21968384948020483,%
+MW,Proserpine,Manag_Unit_48,FS,1.6017714664889258,%
+WT,Barron,Manag_Unit_48,FS,0.0019385801626904402,%
+WT,Daintree,Manag_Unit_48,FS,0.0,%
+WT,Johnstone,Manag_Unit_48,FS,0.0790209947208387,%
+WT,Lower Herbert,Manag_Unit_48,FS,3.4308053418460043,%
+WT,Mossman,Manag_Unit_48,FS,0.0,%
+WT,Mulgrave-Russell,Manag_Unit_48,FS,0.09312140238092834,%
+WT,Murray,Manag_Unit_48,FS,0.3999843164229334,%
+WT,Tully,Manag_Unit_48,FS,0.035734350543514766,%
+WT,Upper Herbert,Manag_Unit_48,FS,-0.10530900727095675,%
+BM,Baffle,Manag_Unit_48,PN,0.02789108840839453,%
+BM,Burnett,Manag_Unit_48,PN,0.6684323746344454,%
+BM,Burrum,Manag_Unit_48,PN,1.4194557391654241,%
+BM,Kolan,Manag_Unit_48,PN,0.9019457665409897,%
+BM,Mary,Manag_Unit_48,PN,4.452560317934771,%
+BU,Belyando,Manag_Unit_48,PN,-0.08395357001399328,%
+BU,Black,Manag_Unit_48,PN,0.011546638465582572,%
+BU,Bowen Bogie,Manag_Unit_48,PN,2.4939080041787016,%
+BU,Burdekin Delta,Manag_Unit_48,PN,4.607090770144324,%
+BU,Cape Campaspe,Manag_Unit_48,PN,-0.11326518259020299,%
+BU,Don,Manag_Unit_48,PN,1.6132135309843219,%
+BU,East Burdekin,Manag_Unit_48,PN,5.366640861202645,%
+BU,Haughton,Manag_Unit_48,PN,4.52171616731222,%
+BU,Ross,Manag_Unit_48,PN,0.1659347043341052,%
+BU,Suttor,Manag_Unit_48,PN,0.38819068354853786,%
+BU,Upper Burdekin,Manag_Unit_48,PN,1.1602839881500737,%
+CY,Endeavour,Manag_Unit_48,PN,0.4229345551030196,%
+CY,Jacky Jacky,Manag_Unit_48,PN,0.0,%
+CY,Jeannie,Manag_Unit_48,PN,0.0,%
+CY,Lockhart,Manag_Unit_48,PN,0.0,%
+CY,Normanby,Manag_Unit_48,PN,0.04594548800349911,%
+CY,Olive Pascoe,Manag_Unit_48,PN,0.0,%
+CY,Stewart,Manag_Unit_48,PN,0.0,%
+FI,Boyne,Manag_Unit_48,PN,0.004025701822235629,%
+FI,Calliope,Manag_Unit_48,PN,3.1407377463507276,%
+FI,Comet,Manag_Unit_48,PN,0.28547014302439394,%
+FI,Dawson,Manag_Unit_48,PN,0.3509242604194012,%
+FI,Fitzroy,Manag_Unit_48,PN,23.393315427235713,%
+FI,Isaac,Manag_Unit_48,PN,2.3068246298200275,%
+FI,Mackenzie,Manag_Unit_48,PN,0.06315237502114839,%
+FI,Nogoa,Manag_Unit_48,PN,3.0104643402590296,%
+FI,Shoalwater,Manag_Unit_48,PN,5.5098782289476493e-08,%
+FI,Styx,Manag_Unit_48,PN,0.0809426962835799,%
+FI,Theresa,Manag_Unit_48,PN,5.9459354271552485,%
+FI,Water Park,Manag_Unit_48,PN,0.010759519762969011,%
+MW,O-Connell,Manag_Unit_48,PN,3.1079043187940756,%
+MW,Pioneer,Manag_Unit_48,PN,1.0435765316379975,%
+MW,Plane,Manag_Unit_48,PN,0.8725998165535641,%
+MW,Proserpine,Manag_Unit_48,PN,1.0611356754156618,%
+WT,Barron,Manag_Unit_48,PN,0.002630057815915199,%
+WT,Daintree,Manag_Unit_48,PN,0.0,%
+WT,Johnstone,Manag_Unit_48,PN,0.13427814013552503,%
+WT,Lower Herbert,Manag_Unit_48,PN,2.4025598145562657,%
+WT,Mossman,Manag_Unit_48,PN,0.0,%
+WT,Mulgrave-Russell,Manag_Unit_48,PN,0.11465927061183862,%
+WT,Murray,Manag_Unit_48,PN,0.8129733383224891,%
+WT,Tully,Manag_Unit_48,PN,0.10254860779029154,%
+WT,Upper Herbert,Manag_Unit_48,PN,-0.05203585028529553,%
+BM,Baffle,Manag_Unit_48,PP,0.013636762724336267,%
+BM,Burnett,Manag_Unit_48,PP,0.5235057057595952,%
+BM,Burrum,Manag_Unit_48,PP,1.9546731126003303,%
+BM,Kolan,Manag_Unit_48,PP,0.8631583444421762,%
+BM,Mary,Manag_Unit_48,PP,4.98733225011643,%
+BU,Belyando,Manag_Unit_48,PP,-0.2260417394191609,%
+BU,Black,Manag_Unit_48,PP,0.010249300436490555,%
+BU,Bowen Bogie,Manag_Unit_48,PP,3.03218587086815,%
+BU,Burdekin Delta,Manag_Unit_48,PP,2.5694626431824,%
+BU,Cape Campaspe,Manag_Unit_48,PP,-0.23666987076973148,%
+BU,Don,Manag_Unit_48,PP,1.7332750516668067,%
+BU,East Burdekin,Manag_Unit_48,PP,4.336857667595772,%
+BU,Haughton,Manag_Unit_48,PP,3.5231101916573095,%
+BU,Ross,Manag_Unit_48,PP,0.13284038620516025,%
+BU,Suttor,Manag_Unit_48,PP,0.23461901989844874,%
+BU,Upper Burdekin,Manag_Unit_48,PP,1.152427726908105,%
+CY,Endeavour,Manag_Unit_48,PP,0.6824437421681178,%
+CY,Jacky Jacky,Manag_Unit_48,PP,0.0,%
+CY,Jeannie,Manag_Unit_48,PP,0.0,%
+CY,Lockhart,Manag_Unit_48,PP,0.0,%
+CY,Normanby,Manag_Unit_48,PP,0.045058287873129856,%
+CY,Olive Pascoe,Manag_Unit_48,PP,0.0,%
+CY,Stewart,Manag_Unit_48,PP,0.0,%
+FI,Boyne,Manag_Unit_48,PP,0.002645505457277633,%
+FI,Calliope,Manag_Unit_48,PP,3.201056038937697,%
+FI,Comet,Manag_Unit_48,PP,0.48143680843886916,%
+FI,Dawson,Manag_Unit_48,PP,0.5591612104901734,%
+FI,Fitzroy,Manag_Unit_48,PP,17.34578509326359,%
+FI,Isaac,Manag_Unit_48,PP,0.9533705743064183,%
+FI,Mackenzie,Manag_Unit_48,PP,-0.14524613634334316,%
+FI,Nogoa,Manag_Unit_48,PP,2.5784139138313606,%
+FI,Shoalwater,Manag_Unit_48,PP,1.0752989752323676e-07,%
+FI,Styx,Manag_Unit_48,PP,0.06396813841447878,%
+FI,Theresa,Manag_Unit_48,PP,5.010912078902053,%
+FI,Water Park,Manag_Unit_48,PP,0.014071875419410098,%
+MW,O-Connell,Manag_Unit_48,PP,3.0238070288182293,%
+MW,Pioneer,Manag_Unit_48,PP,0.4467527019720459,%
+MW,Plane,Manag_Unit_48,PP,0.32103359943748233,%
+MW,Proserpine,Manag_Unit_48,PP,2.6094107595658835,%
+WT,Barron,Manag_Unit_48,PP,0.0026172009258120387,%
+WT,Daintree,Manag_Unit_48,PP,0.0,%
+WT,Johnstone,Manag_Unit_48,PP,0.09120344787923411,%
+WT,Lower Herbert,Manag_Unit_48,PP,2.3944503361643,%
+WT,Mossman,Manag_Unit_48,PP,0.0,%
+WT,Mulgrave-Russell,Manag_Unit_48,PP,0.03529187602735205,%
+WT,Murray,Manag_Unit_48,PP,0.5192772011334206,%
+WT,Tully,Manag_Unit_48,PP,0.0861820833265456,%
+WT,Upper Herbert,Manag_Unit_48,PP,-0.0553407031009391,%

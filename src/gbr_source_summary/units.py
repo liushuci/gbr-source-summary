@@ -114,7 +114,12 @@ def convert_report_card_units(
     return out
 
 
-def apply_units(df: pd.DataFrame, units: str, years: int) -> pd.DataFrame:
+def apply_units(
+        df: pd.DataFrame,
+        units: str, 
+        years: int,
+        value_column: str = None,
+    ) -> pd.DataFrame:
     """
     Apply unit conversion.
 
@@ -124,7 +129,11 @@ def apply_units(df: pd.DataFrame, units: str, years: int) -> pd.DataFrame:
     - mixed report-style units: report
     """
     if units == "report":
-        return convert_report_card_units(df, years=years)
+        return convert_report_card_units(
+            df,
+            value_column=value_column,
+            model_years=years,
+        )
 
     if units in {"kg", "t", "kt", "t/yr", "kt/yr"}:
         return convert_load_units(df, units=units, years=years)

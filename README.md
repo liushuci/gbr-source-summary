@@ -93,23 +93,30 @@ python scripts/check_basin_outputs.py \
 ## Repository Structure
 
 
-gbr-source-summary
+gbr_source_summary/
 │
-├── src/gbr_source_summary
-│ ├── init.py
-│ ├── config.py
-│ ├── workflows_fu.py
-│ ├── workflows_compare.py
-│ ├── workflows_process.py
-│ ├── report_card_summary.py
-│ └── utils.py
+├─ src/
+│  └─ gbr_source_summary/
+│     ├─ config.py
+│     ├─ naming.py
+│     ├─ units.py
+│     ├─ io.py
+│     ├─ comparison.py
+│     ├─ qa.py
+│     │
+│     ├─ workflows_fu.py
+│     ├─ workflows_process.py
+│     ├─ workflows_basin.py
+│     └─ workflows_region.py
 │
-├── scripts
-│ └── run_summary.py
+├─ scripts/
+│  ├─ run_fu_summary.py
+│  ├─ run_process_summary.py
+│  ├─ run_basin_summary.py
+│  ├─ run_region_summary.py
+│  ├─ check_basin_outputs.py
+│  └─ run_all_reports.py
 │
-├── tests
-│
-├── README.md
-├── requirements.txt
-└── pyproject.toml
-
+├─ check_outputs/
+├─ README.md
+└─ .gitignore

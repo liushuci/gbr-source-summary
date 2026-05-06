@@ -6,12 +6,11 @@ This module converts Source contribution tables into:
 - region-level process summary tables
 - GBR-wide process summary tables
 
-The logic follows the GBR reporting conventions used in the existing notebook.
-
 Supported summary styles
 ------------------------
-Sediment-style constituents:
+Sediment / particulate-style constituents:
 - FS
+- CS
 - PN
 - PP
 
@@ -21,10 +20,13 @@ These are summarised into:
 - Gully
 - ChannelRemobilisation
 
-DIN-style constituent:
+Dissolved-style constituents:
 - DIN
+- DON
+- DIP
+- DOP
 
-This is summarised into:
+These are summarised into:
 - SurfaceRunoff
 - Seepage
 - PointSource
@@ -35,21 +37,13 @@ from __future__ import annotations
 import pandas as pd
 
 
+SEDIMENT_STYLE_CONSTITUENTS = {"FS", "CS", "PN", "PP"}
+DISSOLVED_STYLE_CONSTITUENTS = {"DIN", "DON", "DIP", "DOP"}
+
+
 def _safe_col(df: pd.DataFrame, col: str) -> pd.Series:
     """
     Return a numeric column if present, otherwise a zero-filled series.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Input dataframe.
-    col : str
-        Column name to retrieve.
-
-    Returns
-    -------
-    pd.Series
-        Numeric series aligned to df.index.
     """
     if col in df.columns:
         return pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -60,21 +54,6 @@ def _safe_col(df: pd.DataFrame, col: str) -> pd.Series:
 def _reshape_process_series(series: pd.Series, value_column: str) -> pd.DataFrame:
     """
     Convert a grouped process series into a single-row dataframe.
-
-    Example
-    -------
-    Input series index:
-        Hillslope surface soil
-        Streambank
-        Gully
-
-    Output dataframe columns:
-        Hillslope surface soil, Streambank, Gully
-
-    Returns
-    -------
-    pd.DataFrame
-        One-row dataframe for easier process recombination.
     """
     out = pd.DataFrame(series).T
     out.columns.name = None
@@ -89,21 +68,16 @@ def _build_sediment_process_table(
     value_column: str,
 ) -> pd.DataFrame:
     """
-    Build the standard sediment-style process table for FS / PN / PP.
+    Build the standard sediment/particulate-style process table for:
+    FS, CS, PN, PP.
 
     FS uses:
     - Hillslope surface soil
     - Undefined
 
-    PN/PP use:
+    CS/PN/PP use:
     - Hillslope no source distinction
     - Undefined
-
-    Returns
-    -------
-    pd.DataFrame
-        Index = reporting process names
-        Column = value_column
     """
     out = df_row.copy()
 
@@ -118,28 +92,17 @@ def _build_sediment_process_table(
 
     result = out[["Hillslope", "Streambank", "Gully", "ChannelRemobilisation"]].T
     result.columns = [value_column]
+    result.index.name = "Process"
     return result
 
 
-def _build_din_process_table(
+def _build_dissolved_process_table(
     df_row: pd.DataFrame,
     value_column: str,
 ) -> pd.DataFrame:
     """
-    Build the standard DIN process table.
-
-    DIN uses:
-    - Undefined
-    - Diffuse Dissolved
-    - Hillslope no source distinction
-    - Seepage
-    - Point Source
-
-    Returns
-    -------
-    pd.DataFrame
-        Index = reporting process names
-        Column = value_column
+    Build the standard dissolved-style process table for:
+    DIN, DON, DIP, DOP.
     """
     out = df_row.copy()
 
@@ -153,6 +116,7 @@ def _build_din_process_table(
 
     result = out[["SurfaceRunoff", "Seepage", "PointSource"]].T
     result.columns = [value_column]
+    result.index.name = "Process"
     return result
 
 
@@ -166,30 +130,6 @@ def build_basin_process_summary(
 ) -> dict[str, dict[str, pd.DataFrame]]:
     """
     Build per-basin process summary tables.
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Source contribution dataframe, already merged with LUT if needed.
-    constituents : list[str]
-        Constituents to summarise, typically ["FS", "PN", "PP", "DIN"].
-    value_column : str
-        Numeric column to summarise, e.g. "LoadToRegExport (kg)".
-    basin_column : str
-        Basin / management unit grouping column.
-    constituent_column : str
-        Constituent column name.
-    process_column : str
-        Process column name.
-
-    Returns
-    -------
-    dict[str, dict[str, pd.DataFrame]]
-        {
-            basin_name: {
-                constituent: dataframe indexed by reporting process
-            }
-        }
     """
     required_cols = [basin_column, constituent_column, process_column, value_column]
     missing = [col for col in required_cols if col not in df.columns]
@@ -220,14 +160,14 @@ def build_basin_process_summary(
             series = basin_group.loc[constituent][value_column]
             df_row = _reshape_process_series(series, value_column=value_column)
 
-            if constituent in ["FS", "PN", "PP"]:
+            if constituent in SEDIMENT_STYLE_CONSTITUENTS:
                 result[basin][constituent] = _build_sediment_process_table(
                     df_row=df_row,
                     constituent=constituent,
                     value_column=value_column,
                 )
-            elif constituent == "DIN":
-                result[basin][constituent] = _build_din_process_table(
+            elif constituent in DISSOLVED_STYLE_CONSTITUENTS:
+                result[basin][constituent] = _build_dissolved_process_table(
                     df_row=df_row,
                     value_column=value_column,
                 )
@@ -241,18 +181,6 @@ def aggregate_region_process_summary(
 ) -> dict[str, pd.DataFrame]:
     """
     Aggregate basin process summary tables into one regional summary per constituent.
-
-    Parameters
-    ----------
-    basin_summary : dict
-        Basin-level process summaries.
-    constituents : list[str]
-        Constituents to aggregate.
-
-    Returns
-    -------
-    dict[str, pd.DataFrame]
-        Constituent -> region-level process summary dataframe
     """
     result: dict[str, pd.DataFrame] = {}
 
@@ -277,18 +205,6 @@ def aggregate_gbr_process_summary(
 ) -> dict[str, pd.DataFrame]:
     """
     Aggregate region process summary tables into one GBR-wide summary per constituent.
-
-    Parameters
-    ----------
-    region_summaries : dict
-        Region-level process summaries.
-    constituents : list[str]
-        Constituents to aggregate.
-
-    Returns
-    -------
-    dict[str, pd.DataFrame]
-        Constituent -> GBR-wide process summary dataframe
     """
     result: dict[str, pd.DataFrame] = {}
 

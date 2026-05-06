@@ -2,13 +2,14 @@
 Higher-level FU workflows for gbr_source_summary.
 
 This module builds:
-- basin FU summaries for selected region(s)/model
+- grouped FU summaries for selected region(s)/model
 - region FU summaries
 - GBR-style combined summaries across the selected regions
 
-Supports both basin aggregation scales:
+Supported aggregation scales:
 - Basin_35
 - Manag_Unit_48
+- WQI
 """
 
 from __future__ import annotations
@@ -31,38 +32,91 @@ from .units import apply_units, rename_units_column
 
 def resolve_basin_column(basin_scale: str) -> str:
     """
-    Resolve user-facing basin scale input to the actual lookup column name.
+    Resolve user-facing aggregation scale input to the actual lookup column name.
 
     Parameters
     ----------
     basin_scale : str
         Supported values:
-        - "35", "Basin_35", "basin35"
-        - "48", "MU_48", "Manag_Unit_48", "management_unit_48"
+        - Basin_35:
+            "35", "basin35", "basin_35"
+        - Manag_Unit_48:
+            "48", "mu48", "mu_48", "manag_unit_48", "management_unit_48"
+        - WQI:
+            "wqi"
 
     Returns
     -------
     str
         Lookup column name used in the LUT/dataframe.
+        One of:
+            - "Basin_35"
+            - "Manag_Unit_48"
+            - "WQI"
     """
+    if basin_scale is None:
+        raise ValueError("basin_scale cannot be None")
+
+    key = str(basin_scale).strip().lower()
+
     basin_scale_map = {
+        # Basin 35
         "35": "Basin_35",
-        "basin_35": "Basin_35",
         "basin35": "Basin_35",
+        "basin_35": "Basin_35",
+
+        # MU48
         "48": "Manag_Unit_48",
+        "mu48": "Manag_Unit_48",
         "mu_48": "Manag_Unit_48",
         "manag_unit_48": "Manag_Unit_48",
         "management_unit_48": "Manag_Unit_48",
+
+        # WQI
+        "wqi": "WQI",
     }
 
-    basin_key = basin_scale.strip().lower()
-    if basin_key not in basin_scale_map:
+    if key not in basin_scale_map:
         raise ValueError(
-            "Invalid basin_scale. Use one of: "
-            "'35', 'Basin_35', '48', 'MU_48', 'Manag_Unit_48'."
+            "Invalid basin_scale. Use one of:\n"
+            "  Basin_35: '35', 'basin35', 'basin_35'\n"
+            "  Manag_Unit_48: '48', 'mu48', 'mu_48', 'manag_unit_48', 'management_unit_48'\n"
+            "  WQI: 'wqi'"
         )
 
-    return basin_scale_map[basin_key]
+    return basin_scale_map[key]
+
+
+def _convert_wide_report_units(
+    df: pd.DataFrame,
+    *,
+    model_years: float,
+) -> pd.DataFrame:
+    """
+    Convert FU wide tables from total kg over model period to report-card units.
+
+    Expected input
+    --------------
+    Wide dataframe with:
+    - index = FU
+    - columns = constituent names
+
+    Conversion
+    ----------
+    - FS, CS -> kt/yr
+    - all others -> t/yr
+    """
+    out = df.copy()
+
+    for col in out.columns:
+        out[col] = pd.to_numeric(out[col], errors="coerce").fillna(0.0)
+
+        if str(col).upper() in {"FS", "CS"}:
+            out[col] = out[col] / 1e6 / model_years
+        else:
+            out[col] = out[col] / 1e3 / model_years
+
+    return out
 
 
 def build_region_fu_export_summary(
@@ -74,7 +128,7 @@ def build_region_fu_export_summary(
     basin_scale: str = "48",
 ) -> tuple[dict[str, pd.DataFrame], pd.DataFrame]:
     """
-    Build basin-level and region-level FU export summaries for one region/model.
+    Build grouped and region-level FU export summaries for one region/model.
 
     Parameters
     ----------
@@ -89,18 +143,21 @@ def build_region_fu_export_summary(
     value_column : str, default "LoadToRegExport (kg)"
         Column containing export loads.
     basin_scale : str, default "48"
-        Basin aggregation scale.
+        Aggregation scale. Supported values resolve to:
+        - Basin_35
+        - Manag_Unit_48
+        - WQI
 
     Returns
     -------
     tuple
         (
-            basin_summary,
+            grouped_summary,
             region_summary,
         )
 
-        basin_summary : dict[str, pd.DataFrame]
-            Nested mapping of basin -> FU summary dataframe
+        grouped_summary : dict[str, pd.DataFrame]
+            Nested mapping of aggregation unit -> FU summary dataframe
 
         region_summary : pd.DataFrame
             Region-level FU summary dataframe
@@ -113,7 +170,7 @@ def build_region_fu_export_summary(
     df = load_reg_contributor_data_grid_with_lut(cfg, region, model)
     df = apply_constituent_name_standardisation(df)
 
-    basin_summary = build_basin_fu_summary(
+    grouped_summary = build_basin_fu_summary(
         df=df,
         constituents=constituents,
         fus_of_interest=cfg.fus_of_interest,
@@ -121,9 +178,9 @@ def build_region_fu_export_summary(
         basin_column=basin_column,
     )
 
-    region_summary = aggregate_region_fu_summary(basin_summary)
+    region_summary = aggregate_region_fu_summary(grouped_summary)
 
-    return basin_summary, region_summary
+    return grouped_summary, region_summary
 
 
 def build_fu_export_summaries(
@@ -155,22 +212,25 @@ def build_fu_export_summaries(
         Column containing export loads.
     units : str, default "kg"
         Output units passed to apply_units().
+        Special case:
+        - "report" is handled here directly for wide FU tables
     basin_scale : str, default "48"
-        Basin aggregation scale. Supported values:
-        - "35" / "Basin_35"
-        - "48" / "MU_48" / "Manag_Unit_48"
+        Aggregation scale. Supported values resolve to:
+        - Basin_35
+        - Manag_Unit_48
+        - WQI
 
     Returns
     -------
     tuple
         (
-            basin_summaries_by_region,
+            grouped_summaries_by_region,
             region_summaries_by_region,
             combined_summary
         )
 
-        basin_summaries_by_region : dict[str, dict[str, pd.DataFrame]]
-            Nested dict of region -> basin -> FU summary dataframe
+        grouped_summaries_by_region : dict[str, dict[str, pd.DataFrame]]
+            Nested dict of region -> aggregation unit -> FU summary dataframe
 
         region_summaries_by_region : dict[str, pd.DataFrame]
             Region-level FU summaries after unit conversion
@@ -183,11 +243,11 @@ def build_fu_export_summaries(
     if constituents is None:
         constituents = ["FS", "PN", "PP", "DIN", "DON", "DIP", "DOP"]
 
-    basin_summaries_by_region: Dict[str, dict[str, pd.DataFrame]] = {}
+    grouped_summaries_by_region: Dict[str, dict[str, pd.DataFrame]] = {}
     region_summaries_by_region_raw: Dict[str, pd.DataFrame] = {}
 
     for reg in selected_regions:
-        basin_summary, region_summary = build_region_fu_export_summary(
+        grouped_summary, region_summary = build_region_fu_export_summary(
             cfg=cfg,
             region=reg,
             model=model,
@@ -195,36 +255,48 @@ def build_fu_export_summaries(
             value_column=value_column,
             basin_scale=basin_scale,
         )
-        basin_summaries_by_region[reg] = basin_summary
+        grouped_summaries_by_region[reg] = grouped_summary
         region_summaries_by_region_raw[reg] = region_summary
 
     combined_summary_raw = aggregate_gbr_fu_summary(region_summaries_by_region_raw)
 
-    # Convert and relabel regional summaries
     region_summaries_by_region: Dict[str, pd.DataFrame] = {}
     for reg, df in region_summaries_by_region_raw.items():
-        df_units = apply_units(
-            df,
-            units=units,
-            years=cfg.model_years,
-        )
+        if units == "report":
+            df_units = _convert_wide_report_units(
+                df,
+                model_years=cfg.model_years,
+            )
+        else:
+            df_units = apply_units(
+                df,
+                units=units,
+                years=cfg.model_years,
+            )
+
         df_units = rename_units_column(
             df_units,
             base_name="LoadToRegExport",
-            units=units,
+            units="kt/yr & t/yr" if units == "report" else units,
         )
         region_summaries_by_region[reg] = df_units
 
-    # Convert and relabel combined summary
-    combined_summary = apply_units(
-        combined_summary_raw,
-        units=units,
-        years=cfg.model_years,
-    )
+    if units == "report":
+        combined_summary = _convert_wide_report_units(
+            combined_summary_raw,
+            model_years=cfg.model_years,
+        )
+    else:
+        combined_summary = apply_units(
+            combined_summary_raw,
+            units=units,
+            years=cfg.model_years,
+        )
+
     combined_summary = rename_units_column(
         combined_summary,
         base_name="LoadToRegExport",
-        units=units,
+        units="kt/yr & t/yr" if units == "report" else units,
     )
 
-    return basin_summaries_by_region, region_summaries_by_region, combined_summary
+    return grouped_summaries_by_region, region_summaries_by_region, combined_summary

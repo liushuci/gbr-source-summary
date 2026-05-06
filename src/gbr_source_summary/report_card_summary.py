@@ -1,24 +1,34 @@
 """
-Final report-card style summary workflow for gbr_source_summary.
+Report-card summary and bundle wrapper for gbr_source_summary.
 
-This module combines:
-- FU scenario comparison outputs
-- process summary outputs
+This module provides two layers:
 
-into flat long-format tables for:
-- GBR level
-- Region level
-- Basin level
+1. Core report-card summary
+   - FU scenario comparison outputs
+   - process summary outputs
+   - flattened long-format tables for GBR / Region / Basin
+   - CSV + Excel + QA outputs
 
-It exports:
-- one CSV for each level
-- one combined CSV
-- one Excel workbook containing all tables
+2. Bundle wrapper
+   - creates a clean output folder structure
+   - runs the core summary first
+   - optionally runs extra workflow steps one by one
+   - records step status and output files
+   - writes a bundle README.txt
+
+Notes
+-----
+- FU wide tables and process single-constituent tables cannot use
+  apply_units(units="report") directly, because they do not contain a
+  'Constituent' column. Those are converted manually here.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable, Any
+import traceback
 
 import pandas as pd
 
@@ -57,7 +67,6 @@ FU_BASIN_SCENARIO_KEYS = {
     "percent_reduction_basin": "PERCENT_REDUCTION",
 }
 
-
 SUMMARY_COLUMNS = [
     "Source",
     "MetricType",
@@ -71,6 +80,47 @@ SUMMARY_COLUMNS = [
     "Units",
     "Value",
 ]
+
+DEFAULT_BUNDLE_SUBDIRS = {
+    "metadata": "00_metadata",
+    "report_card_summary": "01_report_card_summary",
+    "region_summary": "02_region_summary",
+    "basin_summary": "03_basin_summary",
+    "landuse_rainfall": "04_landuse_rainfall",
+    "source_sink_summary": "05_source_sink_summary",
+    "source_sink_sankey": "06_source_sink_sankey",
+    "other": "90_other",
+}
+
+FILE_DESCRIPTIONS = {
+    "metadata_csv": "Run metadata including config, regions, units, process model, and timestamp.",
+    "qa_summary_csv": "QA checks for missing values, duplicates, negative values, and percent-reduction bounds.",
+    "gbr_summary_csv": "GBR-level flattened report-card summary combining FU and process outputs.",
+    "region_summary_csv": "Region-level flattened report-card summary combining FU and process outputs.",
+    "basin_summary_csv": "Basin-level flattened report-card summary combining FU and process outputs.",
+    "summary_csv": "Combined flattened summary across GBR, region, and basin levels.",
+    "summary_workbook": "Excel workbook containing metadata, QA, and all core summary tables.",
+    "bundle_metadata_csv": "Top-level metadata for the bundle run.",
+    "bundle_step_summary_csv": "Step-by-step output index with one output file per row.",
+    "bundle_readme_txt": "Human-readable overview of the bundle structure and outputs.",
+    "region_output_csv": "Region summary outputs from an external workflow.",
+    "basin_output_csv": "Basin summary outputs from an external workflow.",
+    "landuse_rainfall_csv": "Land use and rainfall summary outputs.",
+    "source_sink_summary_csv": "Source-sink summary outputs.",
+    "sankey_plot": "Sankey diagram output.",
+    "region_basin_totals_csv": "Basin totals used to roll up region scenario comparison outputs.",
+    "region_basin_fu_loads_csv": "Underlying basin FU scenario loads used for region aggregation.",
+    "region_summary_workbook": "Excel workbook containing region totals and scenario comparison tables.",
+}
+
+
+@dataclass
+class StepResult:
+    name: str
+    status: str
+    output_dir: Path
+    files: dict[str, str]
+    message: str = ""
 
 
 def _empty_summary_df() -> pd.DataFrame:
@@ -88,6 +138,16 @@ def _normalise_first_index_column(df: pd.DataFrame, name: str) -> pd.DataFrame:
     return temp
 
 
+def _report_unit_for_constituent(constituent: str | None) -> str:
+    """
+    Return the actual report-card unit for a constituent.
+    """
+    key = str(constituent).strip().upper() if constituent is not None else ""
+    if key in {"FS", "CS"}:
+        return "kt/yr"
+    return "t/yr"
+
+
 def _flatten_fu_wide_table(
     df: pd.DataFrame,
     *,
@@ -97,9 +157,6 @@ def _flatten_fu_wide_table(
     region: str | None = None,
     basin: str | None = None,
 ) -> pd.DataFrame:
-    """
-    Flatten one FU x constituent wide table to long format.
-    """
     if not isinstance(df, pd.DataFrame) or df.empty:
         return _empty_summary_df()
 
@@ -123,7 +180,11 @@ def _flatten_fu_wide_table(
     temp["Region"] = region
     temp["Basin"] = basin
     temp["Process"] = pd.NA
-    temp["Units"] = units
+
+    if units == "report":
+        temp["Units"] = temp["Constituent"].map(_report_unit_for_constituent)
+    else:
+        temp["Units"] = units
 
     return temp[SUMMARY_COLUMNS]
 
@@ -224,6 +285,10 @@ def _convert_process_basin_tables(
 
     build_process_export_summaries() converts region and combined process
     summaries, but not basin summaries.
+
+    Process summary tables are single-constituent tables:
+    - index = Process
+    - one numeric value column
     """
     out: dict[str, dict[str, dict[str, pd.DataFrame]]] = {}
 
@@ -238,12 +303,37 @@ def _convert_process_basin_tables(
                     out[region][basin][constituent] = df.copy()
                     continue
 
-                df_units = apply_units(df, units=units, years=cfg.model_years)
-                df_units = rename_units_column(
-                    df_units,
-                    base_name="LoadToRegExport",
-                    units=units,
-                )
+                df_units = df.copy()
+                value_col = df_units.columns[0]
+                df_units[value_col] = pd.to_numeric(
+                    df_units[value_col], errors="coerce"
+                ).fillna(0.0)
+
+                if units == "report":
+                    final_units = _report_unit_for_constituent(constituent)
+                    if final_units == "kt/yr":
+                        df_units[value_col] = df_units[value_col] / 1e6 / cfg.model_years
+                    else:
+                        df_units[value_col] = df_units[value_col] / 1e3 / cfg.model_years
+
+                    df_units = rename_units_column(
+                        df_units,
+                        base_name="LoadToRegExport",
+                        units=final_units,
+                    )
+
+                else:
+                    df_units = apply_units(
+                        df_units,
+                        units=units,
+                        years=cfg.model_years,
+                    )
+                    df_units = rename_units_column(
+                        df_units,
+                        base_name="LoadToRegExport",
+                        units=units,
+                    )
+
                 out[region][basin][constituent] = df_units
 
     return out
@@ -259,9 +349,6 @@ def _flatten_process_constituent_table(
     region: str | None = None,
     basin: str | None = None,
 ) -> pd.DataFrame:
-    """
-    Flatten one process table (index=Process, one value column) to long format.
-    """
     if not isinstance(df, pd.DataFrame) or df.empty:
         return _empty_summary_df()
 
@@ -282,7 +369,11 @@ def _flatten_process_constituent_table(
     temp["Basin"] = basin
     temp["FU"] = pd.NA
     temp["Constituent"] = constituent
-    temp["Units"] = units
+
+    if units == "report":
+        temp["Units"] = _report_unit_for_constituent(constituent)
+    else:
+        temp["Units"] = units
 
     return temp[SUMMARY_COLUMNS]
 
@@ -417,9 +508,6 @@ def _build_qa_summary_table(
     basin_summary: pd.DataFrame,
     summary: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Build a compact QA summary table for the final report-card outputs.
-    """
     qa_rows: list[dict[str, object]] = []
 
     def add_row(
@@ -446,13 +534,7 @@ def _build_qa_summary_table(
         required_cols: list[str],
     ) -> None:
         if df.empty:
-            add_row(
-                "empty_output",
-                level,
-                "WARN",
-                1,
-                "Summary table is empty.",
-            )
+            add_row("empty_output", level, "WARN", 1, "Summary table is empty.")
             return
 
         for col in required_cols:
@@ -474,7 +556,17 @@ def _build_qa_summary_table(
             add_row("duplicate_rows", level, "WARN", 0, "Summary table is empty.")
             return
 
-        key_cols = ["Source", "MetricType", "Scenario", "Level", "Region", "Basin", "FU", "Constituent", "Process"]
+        key_cols = [
+            "Source",
+            "MetricType",
+            "Scenario",
+            "Level",
+            "Region",
+            "Basin",
+            "FU",
+            "Constituent",
+            "Process",
+        ]
         key_cols = [c for c in key_cols if c in df.columns]
 
         dup_count = int(df.duplicated(subset=key_cols, keep=False).sum())
@@ -536,7 +628,6 @@ def _build_qa_summary_table(
             "" if missing == 0 else "Rows with missing numeric Value.",
         )
 
-    # GBR checks
     check_missing_ids(
         gbr_summary,
         level="GBR",
@@ -547,7 +638,6 @@ def _build_qa_summary_table(
     check_percent_reduction_bounds(gbr_summary, level="GBR")
     check_missing_value(gbr_summary, level="GBR")
 
-    # Region checks
     check_missing_ids(
         region_summary,
         level="Region",
@@ -558,7 +648,6 @@ def _build_qa_summary_table(
     check_percent_reduction_bounds(region_summary, level="Region")
     check_missing_value(region_summary, level="Region")
 
-    # Basin checks
     check_missing_ids(
         basin_summary,
         level="Basin",
@@ -569,13 +658,172 @@ def _build_qa_summary_table(
     check_percent_reduction_bounds(basin_summary, level="Basin")
     check_missing_value(basin_summary, level="Basin")
 
-    # Whole summary
     if summary.empty:
         add_row("all_summary_empty", "ALL", "WARN", 1, "Final combined summary is empty.")
     else:
         add_row("all_summary_empty", "ALL", "PASS", 0, "")
 
     return pd.DataFrame(qa_rows)
+
+
+def _build_metadata_table(
+    *,
+    cfg: GBRConfig,
+    constituents: list[str] | None,
+    units: str,
+    process_model: str,
+    value_column: str,
+    output_dir: Path,
+) -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "Key": [
+                "Generated",
+                "OutputDir",
+                "Units",
+                "ProcessModel",
+                "ValueColumn",
+                "Regions",
+                "Constituents",
+                "ModelYears",
+            ],
+            "Value": [
+                pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                str(output_dir),
+                units,
+                process_model,
+                value_column,
+                ", ".join(getattr(cfg, "regions", []) or []),
+                ", ".join(constituents) if constituents else "ALL",
+                getattr(cfg, "model_years", ""),
+            ],
+        }
+    )
+
+
+def _write_step_summary(step_results: list[StepResult], output_path: Path) -> pd.DataFrame:
+    rows = []
+
+    for s in step_results:
+        if s.files:
+            for file_key, file_path in s.files.items():
+                rows.append(
+                    {
+                        "Step": s.name,
+                        "Status": s.status,
+                        "OutputDir": str(s.output_dir),
+                        "FileType": file_key,
+                        "FilePath": file_path,
+                        "Description": FILE_DESCRIPTIONS.get(
+                            file_key,
+                            "No description available.",
+                        ),
+                        "Message": s.message,
+                    }
+                )
+        else:
+            rows.append(
+                {
+                    "Step": s.name,
+                    "Status": s.status,
+                    "OutputDir": str(s.output_dir),
+                    "FileType": None,
+                    "FilePath": None,
+                    "Description": "No files produced.",
+                    "Message": s.message,
+                }
+            )
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values(["Step", "FileType"], na_position="last").reset_index(drop=True)
+    df.to_csv(output_path, index=False)
+    return df
+
+
+def _write_bundle_readme(
+    *,
+    output_path: Path,
+    output_root: Path,
+    bundle_dirs: dict[str, Path],
+    bundle_meta: pd.DataFrame,
+    step_summary_df: pd.DataFrame,
+) -> None:
+    generated = ""
+    units = ""
+    process_model = ""
+    regions = ""
+    constituents = ""
+    value_column = ""
+
+    if not bundle_meta.empty and {"Key", "Value"}.issubset(bundle_meta.columns):
+        meta_lookup = dict(zip(bundle_meta["Key"], bundle_meta["Value"]))
+        generated = str(meta_lookup.get("Generated", ""))
+        units = str(meta_lookup.get("Units", ""))
+        process_model = str(meta_lookup.get("ProcessModel", ""))
+        regions = str(meta_lookup.get("Regions", ""))
+        constituents = str(meta_lookup.get("Constituents", ""))
+        value_column = str(meta_lookup.get("ValueColumn", ""))
+
+    lines: list[str] = []
+    lines.append("GBR Source Summary - Report Card Bundle")
+    lines.append("=" * 50)
+    lines.append("")
+    lines.append(f"Generated: {generated}")
+    lines.append(f"Output root: {output_root}")
+    lines.append(f"Units mode: {units}")
+    lines.append(f"Process model: {process_model}")
+    lines.append(f"Value column: {value_column}")
+    lines.append(f"Regions: {regions}")
+    lines.append(f"Constituents: {constituents}")
+    lines.append("")
+    lines.append("Bundle folders")
+    lines.append("-" * 50)
+
+    for key, path in bundle_dirs.items():
+        lines.append(f"{key}: {path}")
+
+    lines.append("")
+    lines.append("Produced files")
+    lines.append("-" * 50)
+
+    if step_summary_df.empty:
+        lines.append("No files were recorded.")
+    else:
+        for step_name in step_summary_df["Step"].dropna().astype(str).unique():
+            step_rows = step_summary_df.loc[step_summary_df["Step"] == step_name].copy()
+            if step_rows.empty:
+                continue
+
+            step_status = step_rows["Status"].iloc[0]
+            step_message = step_rows["Message"].iloc[0]
+
+            lines.append(f"[{step_name}]")
+            lines.append(f"Status: {step_status}")
+            if pd.notna(step_message) and str(step_message).strip():
+                lines.append(f"Message: {step_message}")
+
+            for _, row in step_rows.iterrows():
+                file_type = row.get("FileType")
+                file_path = row.get("FilePath")
+                description = row.get("Description")
+
+                if pd.isna(file_type) and pd.isna(file_path):
+                    continue
+
+                lines.append(f"  - {file_type}")
+                lines.append(f"    Path: {file_path}")
+                lines.append(f"    Description: {description}")
+
+            lines.append("")
+
+    lines.append("Notes")
+    lines.append("-" * 50)
+    lines.append("1. The step summary CSV contains one output file per row.")
+    lines.append("2. Core report-card summary outputs are written to 01_report_card_summary.")
+    lines.append("3. In flattened summary tables, Units shows actual units such as kt/yr or t/yr.")
+    lines.append("")
+
+    output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def run_report_card_summary(
@@ -588,26 +836,7 @@ def run_report_card_summary(
     export_excel_workbook: bool = True,
 ) -> dict[str, object]:
     """
-    Run the final report-card summary workflow.
-
-    This:
-    1. builds FU GBR/region/basin scenario summaries
-    2. builds process GBR/region/basin summaries
-    3. flattens them into long-format tables
-    4. exports level-specific and combined outputs
-
-    Returns
-    -------
-    dict[str, object]
-        Dictionary containing:
-        - fu_result
-        - fu_basin_result
-        - process_result
-        - gbr_summary
-        - region_summary
-        - basin_summary
-        - summary
-        - files
+    Core FU + process report-card summary.
     """
     out_dir = ensure_output_dir(output_dir)
     unit_label = label_for_units(units)
@@ -691,8 +920,6 @@ def run_report_card_summary(
         else _empty_summary_df()
     )
 
-
-
     qa_summary = _build_qa_summary_table(
         gbr_summary=gbr_summary,
         region_summary=region_summary,
@@ -700,56 +927,43 @@ def run_report_card_summary(
         summary=summary,
     )
 
+    meta = _build_metadata_table(
+        cfg=cfg,
+        constituents=constituents,
+        units=units,
+        process_model=process_model,
+        value_column=value_column,
+        output_dir=out_dir,
+    )
+
     files: dict[str, Path] = {}
 
-
-
-
+    metadata_csv = out_dir / "metadata.csv"
+    qa_csv = out_dir / f"report_card_qa_summary_{unit_label}.csv"
     gbr_csv = out_dir / f"report_card_summary_gbr_{unit_label}.csv"
     region_csv = out_dir / f"report_card_summary_region_{unit_label}.csv"
     basin_csv = out_dir / f"report_card_summary_basin_{unit_label}.csv"
     summary_csv = out_dir / f"report_card_summary_all_{unit_label}.csv"
 
-    qa_csv = out_dir / f"report_card_qa_summary_{unit_label}.csv"
-
-
-
+    meta.to_csv(metadata_csv, index=False)
+    qa_summary.to_csv(qa_csv, index=False)
     gbr_summary.to_csv(gbr_csv, index=False)
     region_summary.to_csv(region_csv, index=False)
     basin_summary.to_csv(basin_csv, index=False)
     summary.to_csv(summary_csv, index=False)
-    qa_summary.to_csv(qa_csv, index=False)
 
+    files["metadata_csv"] = metadata_csv
+    files["qa_summary_csv"] = qa_csv
     files["gbr_summary_csv"] = gbr_csv
     files["region_summary_csv"] = region_csv
     files["basin_summary_csv"] = basin_csv
     files["summary_csv"] = summary_csv
-    files["qa_summary_csv"] = qa_csv
 
     if export_excel_workbook:
         workbook_path = out_dir / f"report_card_summary_{unit_label}.xlsx"
-        
-        meta = pd.DataFrame({
-            "Key": [
-                "Generated",
-                "Units",
-                "Regions",
-                "Process Model",
-                "Constituents"
-            ],
-            "Value": [
-                pd.Timestamp.now().strftime("%Y-%m-%d %H:%M"),
-                units,
-                ", ".join(cfg.regions),
-                process_model,
-                ", ".join(constituents) if constituents else "ALL"
-            ]
-        })
-        
-        
         export_tables_to_excel(
             tables={
-                "metadata": meta, 
+                "metadata": meta,
                 "qa_summary": qa_summary,
                 "all_summary": summary,
                 "gbr_summary": gbr_summary,
@@ -776,5 +990,209 @@ def run_report_card_summary(
         "basin_summary": basin_summary,
         "summary": summary,
         "qa_summary": qa_summary,
+        "metadata": meta,
         "files": files,
+    }
+
+
+def run_fu_process_report_card_summary(
+    cfg: GBRConfig,
+    output_dir: str | Path,
+    constituents: list[str] | None = None,
+    value_column: str = "LoadToRegExport (kg)",
+    units: str = "report",
+    process_model: str = "BASE",
+    export_excel_workbook: bool = True,
+) -> dict[str, object]:
+    return run_report_card_summary(
+        cfg=cfg,
+        output_dir=output_dir,
+        constituents=constituents,
+        value_column=value_column,
+        units=units,
+        process_model=process_model,
+        export_excel_workbook=export_excel_workbook,
+    )
+
+
+def run_report_card_bundle(
+    cfg: GBRConfig,
+    output_root: str | Path,
+    *,
+    constituents: list[str] | None = None,
+    value_column: str = "LoadToRegExport (kg)",
+    units: str = "report",
+    process_model: str = "BASE",
+    export_excel_workbook: bool = True,
+    extra_steps: dict[str, Callable[..., Any]] | None = None,
+    fail_fast: bool = False,
+) -> dict[str, object]:
+    root = ensure_output_dir(output_root)
+
+    bundle_dirs: dict[str, Path] = {
+        key: ensure_output_dir(root / subdir)
+        for key, subdir in DEFAULT_BUNDLE_SUBDIRS.items()
+    }
+
+    step_results: list[StepResult] = []
+    outputs: dict[str, object] = {}
+
+    bundle_meta = _build_metadata_table(
+        cfg=cfg,
+        constituents=constituents,
+        units=units,
+        process_model=process_model,
+        value_column=value_column,
+        output_dir=root,
+    )
+    bundle_meta_path = bundle_dirs["metadata"] / "bundle_metadata.csv"
+    bundle_meta.to_csv(bundle_meta_path, index=False)
+
+    try:
+        core = run_report_card_summary(
+            cfg=cfg,
+            output_dir=bundle_dirs["report_card_summary"],
+            constituents=constituents,
+            value_column=value_column,
+            units=units,
+            process_model=process_model,
+            export_excel_workbook=export_excel_workbook,
+        )
+        outputs["report_card_summary"] = core
+        step_results.append(
+            StepResult(
+                name="report_card_summary",
+                status="SUCCESS",
+                output_dir=bundle_dirs["report_card_summary"],
+                files={k: str(v) for k, v in core.get("files", {}).items()},
+                message="Core FU + process report-card summary completed.",
+            )
+        )
+    except Exception as exc:
+        step_results.append(
+            StepResult(
+                name="report_card_summary",
+                status="FAILED",
+                output_dir=bundle_dirs["report_card_summary"],
+                files={},
+                message=f"{exc}\n\n{traceback.format_exc()}",
+            )
+        )
+        if fail_fast:
+            step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
+            step_summary_df = _write_step_summary(step_results, step_summary_path)
+
+            readme_path = bundle_dirs["metadata"] / "README.txt"
+            _write_bundle_readme(
+                output_path=readme_path,
+                output_root=root,
+                bundle_dirs=bundle_dirs,
+                bundle_meta=bundle_meta,
+                step_summary_df=step_summary_df,
+            )
+            raise
+
+    for step_name, step_fn in (extra_steps or {}).items():
+        step_dir = bundle_dirs.get(step_name, ensure_output_dir(bundle_dirs["other"] / step_name))
+
+        try:
+            result = step_fn(
+                cfg=cfg,
+                output_dir=step_dir,
+                constituents=constituents,
+                value_column=value_column,
+                units=units,
+                process_model=process_model,
+                bundle_dirs=bundle_dirs,
+            )
+
+            files = {}
+            if isinstance(result, dict):
+                raw_files = result.get("files", {})
+                if isinstance(raw_files, dict):
+                    files = {k: str(v) for k, v in raw_files.items()}
+
+            outputs[step_name] = result
+            step_results.append(
+                StepResult(
+                    name=step_name,
+                    status="SUCCESS",
+                    output_dir=step_dir,
+                    files=files,
+                    message="Completed.",
+                )
+            )
+
+        except NotImplementedError as exc:
+            step_results.append(
+                StepResult(
+                    name=step_name,
+                    status="SKIPPED",
+                    output_dir=step_dir,
+                    files={},
+                    message=str(exc),
+                )
+            )
+            if fail_fast:
+                step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
+                step_summary_df = _write_step_summary(step_results, step_summary_path)
+
+                readme_path = bundle_dirs["metadata"] / "README.txt"
+                _write_bundle_readme(
+                    output_path=readme_path,
+                    output_root=root,
+                    bundle_dirs=bundle_dirs,
+                    bundle_meta=bundle_meta,
+                    step_summary_df=step_summary_df,
+                )
+                raise
+
+        except Exception as exc:
+            step_results.append(
+                StepResult(
+                    name=step_name,
+                    status="FAILED",
+                    output_dir=step_dir,
+                    files={},
+                    message=f"{exc}\n\n{traceback.format_exc()}",
+                )
+            )
+            if fail_fast:
+                step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
+                step_summary_df = _write_step_summary(step_results, step_summary_path)
+
+                readme_path = bundle_dirs["metadata"] / "README.txt"
+                _write_bundle_readme(
+                    output_path=readme_path,
+                    output_root=root,
+                    bundle_dirs=bundle_dirs,
+                    bundle_meta=bundle_meta,
+                    step_summary_df=step_summary_df,
+                )
+                raise
+
+    step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
+    step_summary_df = _write_step_summary(step_results, step_summary_path)
+
+    readme_path = bundle_dirs["metadata"] / "README.txt"
+    _write_bundle_readme(
+        output_path=readme_path,
+        output_root=root,
+        bundle_dirs=bundle_dirs,
+        bundle_meta=bundle_meta,
+        step_summary_df=step_summary_df,
+    )
+
+    return {
+        "output_root": root,
+        "bundle_dirs": bundle_dirs,
+        "bundle_metadata": bundle_meta,
+        "step_summary": step_summary_df,
+        "steps": step_results,
+        "outputs": outputs,
+        "files": {
+            "bundle_metadata_csv": bundle_meta_path,
+            "bundle_step_summary_csv": step_summary_path,
+            "bundle_readme_txt": readme_path,
+        },
     }

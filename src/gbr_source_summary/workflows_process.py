@@ -5,13 +5,6 @@ This module builds:
 - basin process summaries for selected region(s)/model
 - region process summaries
 - GBR-style combined summaries across the selected regions
-
-It connects:
-- io.py
-- naming.py
-- regions.py
-- summary_process.py
-- units.py
 """
 
 from __future__ import annotations
@@ -41,6 +34,12 @@ def _convert_process_summary_dict(
 ) -> dict[str, pd.DataFrame]:
     """
     Apply unit conversion and relabel the single value column for each constituent table.
+
+    Process summary tables are single-constituent tables with:
+    - index = Process
+    - one numeric column
+
+    So for report units we cannot rely on a Constituent column existing.
     """
     out: dict[str, pd.DataFrame] = {}
 
@@ -49,8 +48,35 @@ def _convert_process_summary_dict(
             out[constituent] = df.copy()
             continue
 
-        df_units = apply_units(df, units=units, years=years)
-        df_units = rename_units_column(df_units, base_name=base_name, units=units)
+        df_units = df.copy()
+        value_col = df_units.columns[0]
+        df_units[value_col] = pd.to_numeric(df_units[value_col], errors="coerce").fillna(0.0)
+
+        if units == "report":
+            if constituent in {"FS", "CS"}:
+                df_units[value_col] = df_units[value_col] / 1e6 / years
+                final_units = "kt/yr"
+            else:
+                df_units[value_col] = df_units[value_col] / 1e3 / years
+                final_units = "t/yr"
+
+            df_units = rename_units_column(
+                df_units,
+                base_name=base_name,
+                units=final_units,
+            )
+        else:
+            df_units = apply_units(
+                df_units,
+                units=units,
+                years=years,
+            )
+            df_units = rename_units_column(
+                df_units,
+                base_name=base_name,
+                units=units,
+            )
+
         out[constituent] = df_units
 
     return out
@@ -65,17 +91,9 @@ def build_region_process_export_summary(
 ) -> tuple[dict[str, dict[str, pd.DataFrame]], dict[str, pd.DataFrame]]:
     """
     Build basin-level and region-level process export summaries for one region/model.
-
-    Returns
-    -------
-    tuple
-        (
-            basin_summary_dict,
-            region_summary_dict
-        )
     """
     if constituents is None:
-        constituents = ["FS", "PN", "PP", "DIN"]
+        constituents = ["FS", "CS", "PN", "PP", "DIN", "DON", "DIP", "DOP"]
 
     df = load_reg_contributor_data_grid_with_lut(cfg, region, model)
     df = apply_constituent_name_standardisation(df)
@@ -112,20 +130,11 @@ def build_process_export_summaries(
 ]:
     """
     Build process export summaries for one region, multiple regions, or all GBR regions.
-
-    Returns
-    -------
-    tuple
-        (
-            basin_summaries_by_region,
-            region_summaries_by_region,
-            combined_summary
-        )
     """
     selected_regions = resolve_regions(cfg, region=region, regions=regions)
 
     if constituents is None:
-        constituents = ["FS", "PN", "PP", "DIN"]
+        constituents = ["FS", "CS", "PN", "PP", "DIN", "DON", "DIP", "DOP"]
 
     basin_summaries_by_region: Dict[str, dict[str, dict[str, pd.DataFrame]]] = {}
     region_summaries_by_region_raw: Dict[str, dict[str, pd.DataFrame]] = {}

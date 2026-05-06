@@ -6,7 +6,7 @@ import argparse
 import pandas as pd
 
 from gbr_source_summary.config import GBRConfig
-from gbr_source_summary.workflows_basin import build_basin_scenario_comparison
+from gbr_source_summary.workflows_region import build_region_scenario_comparison
 from gbr_source_summary.naming import (
     standardise_constituent_names,
     standardise_management_unit_names,
@@ -16,7 +16,7 @@ from gbr_source_summary.export_excel import export_tables_to_excel
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Build GBR basin-scale scenario summaries."
+        description="Build GBR region-scale scenario summaries."
     )
 
     parser.add_argument(
@@ -28,7 +28,7 @@ def parse_args() -> argparse.Namespace:
         "--basin-scale",
         default="48",
         choices=["35", "48", "Basin_35", "MU_48", "Manag_Unit_48"],
-        help="Basin aggregation scale.",
+        help="Basin aggregation scale used before rolling up to region.",
     )
     parser.add_argument(
         "--reporting-units",
@@ -41,7 +41,7 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Output folder. Defaults to "
-            "<repo>/check_outputs/basin_summary/<scale>/<units>"
+            "<repo>/check_outputs/region_summary/<scale>/<units>"
         ),
     )
     parser.add_argument(
@@ -61,7 +61,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional list of constituents.",
     )
-
     parser.add_argument(
         "--export-excel",
         action="store_true",
@@ -72,7 +71,6 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional output Excel file path. Used only when --export-excel is set.",
     )
-
 
     return parser.parse_args()
 
@@ -102,7 +100,7 @@ def wide_to_long_with_units(
     Convert wide comparison dataframe back to long format with units.
     """
     out = df.reset_index().melt(
-        id_vars=["Region", "Basin", "BasinScale"],
+        id_vars=["Region"],
         var_name="Constituent",
         value_name=value_name,
     )
@@ -131,8 +129,6 @@ def wide_to_long_with_units(
     return out
 
 
-
-
 def main() -> None:
     args = parse_args()
 
@@ -146,7 +142,7 @@ def main() -> None:
         output_folder = (
             repo_root
             / "check_outputs"
-            / "basin_summary"
+            / "region_summary"
             / basin_scale_label
             / args.reporting_units
         )
@@ -161,7 +157,6 @@ def main() -> None:
 
             if region_label is not None:
                 output_folder = output_folder / region_label
-
     else:
         output_folder = Path(args.output_folder)
 
@@ -172,7 +167,6 @@ def main() -> None:
     print(f"Reporting units : {args.reporting_units}")
     print(f"Output folder   : {output_folder}")
     print(f"Metric type     : {metric_label}")
-
     print(f"Value column    : {args.value_column}")
     print(f"Regions filter  : {args.regions}")
     print(f"Constituents    : {args.constituents}")
@@ -181,7 +175,7 @@ def main() -> None:
         main_path=base_path,
     )
 
-    outputs = build_basin_scenario_comparison(
+    outputs = build_region_scenario_comparison(
         cfg=cfg,
         basin_scale=args.basin_scale,
         regions=args.regions,
@@ -192,13 +186,13 @@ def main() -> None:
 
     anthropogenic_long = wide_to_long_with_units(
         outputs["anthropogenic"],
-        value_name="Anthropogenic",
+        value_name="RegionAnthropogenic",
         reporting_units=args.reporting_units,
         model_years=cfg.model_years,
     )
     reduction_long = wide_to_long_with_units(
         outputs["reduction"],
-        value_name="Reduction",
+        value_name="RegionReduction",
         reporting_units=args.reporting_units,
         model_years=cfg.model_years,
     )
@@ -211,73 +205,51 @@ def main() -> None:
 
     run_label = cfg.rc
 
-    out_basin_fu = output_folder / f"basin_fu_loads_{metric_label}_{run_label}.csv"
+    out_region_totals = output_folder / f"region_totals_{metric_label}_{run_label}.csv"
+    out_base = output_folder / f"region_base_wide_{metric_label}_{run_label}.csv"
+    out_predev = output_folder / f"region_predev_wide_{metric_label}_{run_label}.csv"
+    out_change = output_folder / f"region_change_wide_{metric_label}_{run_label}.csv"
+    out_anth = (
+        output_folder / f"region_anthropogenic_{metric_label}_{run_label}.csv"
+    )
+    out_red = output_folder / f"region_reduction_{metric_label}_{run_label}.csv"
+    out_pct = (
+        output_folder / f"region_percent_reduction_{metric_label}_{run_label}.csv"
+    )
 
-    out_basin_totals = output_folder / f"basin_totals_{metric_label}_{run_label}.csv"
-
-    out_base = output_folder / f"base_wide_{metric_label}_{run_label}.csv"
-    out_predev = output_folder / f"predev_wide_{metric_label}_{run_label}.csv"
-    out_change = output_folder / f"change_wide_{metric_label}_{run_label}.csv"
-    out_anth = output_folder / f"anthropogenic_{metric_label}_{run_label}.csv"
-    out_red = output_folder / f"reduction_{metric_label}_{run_label}.csv"
-    out_pct = output_folder / f"percent_reduction_{metric_label}_{run_label}.csv"
+    if args.excel_path is None:
+        out_excel = output_folder / f"region_summary_{metric_label}_{run_label}.xlsx"
+    else:
+        out_excel = Path(args.excel_path)
 
     value_column = args.value_column
     clean_value_column = value_column.replace(" (kg)", "").replace("(kg)", "").strip()
 
-    outputs["basin_loads"] = outputs["basin_loads"].rename(
+    outputs["region_totals"] = outputs["region_totals"].rename(
         columns={value_column: clean_value_column}
     )
 
-    outputs["compare_ready"] = outputs["compare_ready"].rename(
-        columns={value_column: clean_value_column}
-    )
     # Standardise constituent names
-
-    outputs["basin_loads"]["Constituent"] = standardise_constituent_names(
-        outputs["basin_loads"]["Constituent"]
+    outputs["region_totals"]["Constituent"] = standardise_constituent_names(
+        outputs["region_totals"]["Constituent"]
     )
-
-    outputs["compare_ready"]["Constituent"] = standardise_constituent_names(
-        outputs["compare_ready"]["Constituent"]
-    )
-
     anthropogenic_long["Constituent"] = standardise_constituent_names(
         anthropogenic_long["Constituent"]
     )
-
     reduction_long["Constituent"] = standardise_constituent_names(
         reduction_long["Constituent"]
     )
-
     percent_reduction_long["Constituent"] = standardise_constituent_names(
         percent_reduction_long["Constituent"]
     )
 
-
-    # Standardise basin names
-    outputs["basin_loads"]["Basin"] = standardise_management_unit_names(
-        outputs["basin_loads"]["Basin"]
+    # Standardise region names if needed later; for now keep Region unchanged.
+    # Basin naming is not used in final region outputs, but basin_totals can still be cleaned if exported later.
+    outputs["basin_totals"]["Basin"] = standardise_management_unit_names(
+        outputs["basin_totals"]["Basin"]
     )
 
-    outputs["compare_ready"]["Basin"] = standardise_management_unit_names(
-        outputs["compare_ready"]["Basin"]
-    )
-
-    anthropogenic_long["Basin"] = standardise_management_unit_names(
-        anthropogenic_long["Basin"]
-    )
-
-    reduction_long["Basin"] = standardise_management_unit_names(
-        reduction_long["Basin"]
-    )
-
-    percent_reduction_long["Basin"] = standardise_management_unit_names(
-        percent_reduction_long["Basin"]
-    )
-
-    outputs["basin_loads"].to_csv(out_basin_fu, index=False)
-    outputs["compare_ready"].to_csv(out_basin_totals, index=False)
+    outputs["region_totals"].to_csv(out_region_totals, index=False)
     outputs["base_wide"].to_csv(out_base)
     outputs["predev_wide"].to_csv(out_predev)
     outputs["change_wide"].to_csv(out_change)
@@ -285,24 +257,15 @@ def main() -> None:
     reduction_long.to_csv(out_red, index=False)
     percent_reduction_long.to_csv(out_pct, index=False)
 
-
-
-
     if args.export_excel:
-        if args.excel_path is None:
-            out_excel = output_folder / f"basin_summary_{metric_label}_{run_label}.xlsx"
-        else:
-            out_excel = Path(args.excel_path)
-
         excel_tables = {
-            "basin_fu_loads": outputs["basin_loads"],
-            "basin_totals": outputs["compare_ready"],
-            "base_wide": outputs["base_wide"].reset_index(),
-            "predev_wide": outputs["predev_wide"].reset_index(),
-            "change_wide": outputs["change_wide"].reset_index(),
-            "anthropogenic": anthropogenic_long,
-            "reduction": reduction_long,
-            "percent_reduction": percent_reduction_long,
+            "region_totals": outputs["region_totals"],
+            "region_base_wide": outputs["base_wide"].reset_index(),
+            "region_predev_wide": outputs["predev_wide"].reset_index(),
+            "region_change_wide": outputs["change_wide"].reset_index(),
+            "region_anthropogenic": anthropogenic_long,
+            "region_reduction": reduction_long,
+            "region_percent_reduction": percent_reduction_long,
         }
 
         export_tables_to_excel(
@@ -312,8 +275,7 @@ def main() -> None:
         )
 
     print("\nSaved outputs:")
-    print(f"  {out_basin_fu}")
-    print(f"  {out_basin_totals}")
+    print(f"  {out_region_totals}")
     print(f"  {out_base}")
     print(f"  {out_predev}")
     print(f"  {out_change}")
@@ -323,16 +285,13 @@ def main() -> None:
     if args.export_excel:
         print(f"  {out_excel}")
 
-    print("\nPreview: basin_fu_loads")
-    print(outputs["basin_loads"].head())
+    print("\nPreview: region_totals")
+    print(outputs["region_totals"].head())
 
-    print("\nPreview: basin_totals")
-    print(outputs["compare_ready"].head())
-
-    print("\nPreview: anthropogenic")
+    print("\nPreview: region_anthropogenic")
     print(anthropogenic_long.head())
 
-    print("\nPreview: percent_reduction")
+    print("\nPreview: region_percent_reduction")
     print(percent_reduction_long.head())
 
 

@@ -37,7 +37,7 @@ class GBRConfig:
     """
 
     # Root directory for the model build.
-    main_path: Path
+    main_path: Path | str
 
     # Run identifier used in Source output folder names.
     rc: str = "Gold_93_23"
@@ -111,6 +111,9 @@ class GBRConfig:
 
     # Number of model years used for average annual calculations.
     model_years: int = 30
+
+    def __post_init__(self) -> None:
+        self.main_path = Path(self.main_path)
 
     @property
     def per_year(self) -> float:

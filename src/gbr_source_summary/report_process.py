@@ -1,13 +1,5 @@
 """
 Process report workflow for gbr_source_summary.
-
-This module provides high-level functions to:
-- build process export summaries
-- export one CSV per region and constituent
-- export combined CSV tables
-- export one Excel workbook
-
-This is intended to mirror the FU report workflow.
 """
 
 from __future__ import annotations
@@ -36,44 +28,6 @@ def run_process_report(
 ) -> dict[str, object]:
     """
     Run the process export workflow and export results.
-
-    Parameters
-    ----------
-    cfg : GBRConfig
-        Package configuration object.
-    output_dir : str | Path
-        Folder for exported outputs.
-    model : str
-        Scenario/model name, e.g. "BASE".
-    region : str | None
-        Single region code.
-    regions : list[str] | None
-        Multiple region codes.
-    constituents : list[str] | None
-        Constituents to include.
-    value_column : str
-        Value column to summarise.
-    units : str
-        Output units. Examples:
-        - "kg"
-        - "t/yr"
-        - "kt/yr"
-        - "report"
-    export_region_tables : bool
-        Whether to export one CSV per region for each constituent.
-    export_combined_tables : bool
-        Whether to export combined constituent CSV tables.
-    export_excel_workbook : bool
-        Whether to export one Excel workbook.
-
-    Returns
-    -------
-    dict[str, object]
-        Dictionary containing:
-        - basin_by_region
-        - region_by_region
-        - combined
-        - files
     """
     out_dir = ensure_output_dir(output_dir)
     unit_label = label_for_units(units)
@@ -101,6 +55,7 @@ def run_process_report(
                 regions_dir,
                 prefix=f"{reg}_{model_lower}_",
                 suffix=f"_{unit_label}",
+                index=True,   # keep Process row names
             )
 
         files["regions_dir"] = regions_dir
@@ -111,6 +66,7 @@ def run_process_report(
             out_dir,
             prefix=f"{model_lower}_process_",
             suffix=f"_{unit_label}",
+            index=True,   # keep Process row names
         )
 
         for constituent in combined:
@@ -123,6 +79,7 @@ def run_process_report(
         export_tables_to_excel(
             tables=combined,
             output_path=workbook_path,
+            index=True,   # keep Process row names in workbook too
         )
         files["workbook"] = workbook_path
 
@@ -147,14 +104,6 @@ def run_all_gbr_process_reports(
 ) -> dict[str, object]:
     """
     Run process reports for all configured GBR regions in one call.
-
-    This is a thin wrapper around run_process_report() using cfg.regions.
-
-    Returns
-    -------
-    dict[str, object]
-        Same structure as run_process_report(), plus:
-        - regions_run
     """
     result = run_process_report(
         cfg=cfg,

@@ -12,6 +12,7 @@ def load_basin_lookup(regions_folder: str | Path) -> pd.DataFrame:
         - SUBCAT
         - Basin_35
         - Manag_Unit_48
+        - WQI
 
     Parameters
     ----------
@@ -29,6 +30,7 @@ def load_basin_lookup(regions_folder: str | Path) -> pd.DataFrame:
             Subcatchment
             Basin_35
             MU_48
+            WQI
     """
     regions_folder = Path(regions_folder)
 
@@ -48,7 +50,7 @@ def load_basin_lookup(regions_folder: str | Path) -> pd.DataFrame:
         else:
             df = pd.read_csv(file)
 
-        required_cols = {"SUBCAT", "Basin_35", "Manag_Unit_48"}
+        required_cols = {"SUBCAT", "Basin_35", "Manag_Unit_48", "WQI"}
         missing = required_cols - set(df.columns)
         if missing:
             raise ValueError(
@@ -64,13 +66,12 @@ def load_basin_lookup(regions_folder: str | Path) -> pd.DataFrame:
 
         out["Region"] = region
 
-        out["Subcatchment"] = (
-            out["Subcatchment"]
-            .astype(str)
-            .str.strip()
-        )
+        out["Subcatchment"] = out["Subcatchment"].astype(str).str.strip()
+        out["Basin_35"] = out["Basin_35"].astype(str).str.strip()
+        out["MU_48"] = out["MU_48"].astype(str).str.strip()
+        out["WQI"] = out["WQI"].astype(str).str.strip()
 
-        dfs.append(out[["Region", "Subcatchment", "Basin_35", "MU_48"]])
+        dfs.append(out[["Region", "Subcatchment", "Basin_35", "MU_48", "WQI"]])
 
     basin_lut = pd.concat(dfs, ignore_index=True).drop_duplicates()
 

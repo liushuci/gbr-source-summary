@@ -3,3 +3,9 @@ __pycache__/
 *.pyc
 check_outputs/
 .ipynb_checkpoints/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/

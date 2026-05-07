@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from functools import lru_cache
+
 from .config import GBRConfig
 
 from pathlib import Path
@@ -72,6 +74,26 @@ def load_raw_results(
 
     return pd.read_csv(file_path)
 
+@lru_cache(maxsize=64)
+def _cached_reg_contributor_csv(file_path_str: str) -> pd.DataFrame:
+    """
+    Cached CSV reader for gigantic RegContributorDataGrid files.
+
+    Prevents repeatedly re-reading the same multi-GB CSVs during
+    report-card workflows.
+    """
+
+    return pd.read_csv(
+        file_path_str,
+        low_memory=False,
+        dtype={
+            "Region": "category",
+            "Constituent": "category",
+            "FU": "category",
+        },
+    )
+
+
 
 def load_reg_contributor_data_grid(
     cfg: GBRConfig,
@@ -85,8 +107,7 @@ def load_reg_contributor_data_grid(
 
     if not file_path.exists():
         raise FileNotFoundError(file_path)
-
-    return pd.read_csv(file_path)
+    return _cached_reg_contributor_csv(str(file_path))
 
 
 def load_source_outputs(

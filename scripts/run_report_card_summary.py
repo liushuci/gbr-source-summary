@@ -105,6 +105,7 @@ def _build_reflective_step(
             units=units,
             process_model=process_model,
             model=process_model,
+            scenario=process_model,
             regions=getattr(cfg, "regions", None),
             bundle_dirs=bundle_dirs,
             **extra_kwargs,

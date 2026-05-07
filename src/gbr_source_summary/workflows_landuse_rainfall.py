@@ -1,14 +1,39 @@
+"""
+Land-use and rainfall summary workflows for gbr_source_summary.
+
+This module supports:
+- legacy-style region FU area + stream length summary
+- detailed land-use area summaries by subcatchment, MU48 and region
+- rainfall summaries by subcatchment, Basin_35, MU48, region and GBR
+- bundle-compatible runner: run_landuse_rainfall_summary()
+
+Main input files per region/model:
+- fuAreasTable.csv
+- climateTable.csv
+- ParameterTable.csv
+- <REGION>_Subcat_Regions_LUT.csv
+"""
+
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+
+from .config import GBRConfig
+from .export import ensure_output_dir
+from .export_excel import export_tables_to_excel
 
 
 # =========================================================
 # Defaults / constants
 # =========================================================
+
+DEFAULT_MODEL = "BASE"
+DEFAULT_RC = "Gold_93_23"
 
 DEFAULT_FU_ORDER = [
     "Bananas",
@@ -18,6 +43,19 @@ DEFAULT_FU_ORDER = [
     "Forestry",
     "Grazing",
     "Horticulture",
+    "Sugarcane",
+    "Urban + Other",
+]
+
+FU_LOAD_ORDER = [
+    "Bananas",
+    "Conservation",
+    "Cropping",
+    "Dairy",
+    "Forestry",
+    "Grazing",
+    "Horticulture",
+    "Stream",
     "Sugarcane",
     "Urban + Other",
 ]
@@ -34,28 +72,27 @@ REGION_NAME_MAP = {
 M2_TO_HA = 1.0 / 10000.0
 M_TO_KM = 1.0 / 1000.0
 
-FU_LOAD_ORDER = [
-    "Bananas",
-    "Conservation",
-    "Cropping",
-    "Dairy",
-    "Forestry",
-    "Grazing",
-    "Horticulture",
-    "Stream",
-    "Sugarcane",
-    "Urban + Other",
-]
-
 KT_CONSTITUENTS = ["FS"]
+
+
 # =========================================================
 # Generic helpers
 # =========================================================
 
 def find_column(df: pd.DataFrame, candidates: List[str], df_name: str = "dataframe") -> str:
+    """
+    Find first matching column from a candidate list.
+    """
     for col in candidates:
         if col in df.columns:
             return col
+
+    lower_lookup = {str(c).strip().lower(): c for c in df.columns}
+    for col in candidates:
+        key = str(col).strip().lower()
+        if key in lower_lookup:
+            return lower_lookup[key]
+
     raise KeyError(
         f"None of these columns were found in {df_name}: {candidates}. "
         f"Available columns: {list(df.columns)}"
@@ -83,6 +120,204 @@ def _check_rainfall_consistency(df: pd.DataFrame) -> pd.DataFrame:
     return chk[chk["n_unique_rain"] > 1].copy()
 
 
+def _safe_divide(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    num = pd.to_numeric(numerator, errors="coerce")
+    den = pd.to_numeric(denominator, errors="coerce")
+    out = num / den.where(den != 0)
+    return out.fillna(0.0)
+
+
+def _normalise_id(s: pd.Series) -> pd.Series:
+    return s.astype(str).str.strip()
+
+
+def _selected_regions(cfg: GBRConfig, regions: list[str] | None = None) -> list[str]:
+    if regions is not None:
+        return regions
+
+    cfg_regions = getattr(cfg, "regions", None)
+    if cfg_regions:
+        return list(cfg_regions)
+
+    return ["CY", "WT", "BU", "MW", "FI", "BM"]
+
+
+def _cfg_main_path(cfg: GBRConfig) -> Path:
+    main_path = getattr(cfg, "main_path", None)
+    if main_path is None:
+        raise AttributeError("GBRConfig must have main_path.")
+    return Path(main_path)
+
+
+def _cfg_rc(cfg: GBRConfig) -> str:
+    for attr in ["rc", "RC", "run_code", "model_run", "model_run_name"]:
+        value = getattr(cfg, attr, None)
+        if value:
+            return str(value)
+    return DEFAULT_RC
+
+
+def _cfg_model_years(cfg: GBRConfig) -> float:
+    years = getattr(cfg, "model_years", None)
+    if years is None:
+        return 30.0
+    return float(years)
+
+
+@lru_cache(maxsize=None)
+def _read_csv_cached(path_str: str) -> pd.DataFrame:
+    try:
+        return pd.read_csv(
+            path_str,
+            low_memory=False,
+            on_bad_lines="skip",
+        )
+    except Exception as e:
+        print(f"⚠ Failed reading CSV: {path_str}")
+        print(e)
+        raise
+
+
+    
+
+def _read_csv(path: Path) -> pd.DataFrame:
+    return _read_csv_cached(str(path))
+
+
+# =========================================================
+# File discovery
+# =========================================================
+
+def _model_output_dir(
+    cfg: GBRConfig,
+    region: str,
+    model: str = DEFAULT_MODEL,
+) -> Path:
+    main_path = _cfg_main_path(cfg)
+    rc = _cfg_rc(cfg)
+
+    candidates = [
+        main_path / "Gold_ResultsSets_PointOfTruth" / region / "Model_Outputs" / f"{model}_{rc}",
+        main_path / region / "Model_Outputs" / f"{model}_{rc}",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    search_roots = [
+        main_path / "Gold_ResultsSets_PointOfTruth" / region / "Model_Outputs",
+        main_path / region / "Model_Outputs",
+    ]
+
+    for root in search_roots:
+        if root.exists():
+            matches = sorted(root.glob(f"{model}_*"))
+            if matches:
+                return matches[0]
+
+    raise FileNotFoundError(
+        f"Could not find model output folder for region={region}, model={model}. "
+        f"Tried: {[str(p) for p in candidates]}"
+    )
+
+
+def _find_table_path(
+    cfg: GBRConfig,
+    region: str,
+    filename: str,
+    model: str = DEFAULT_MODEL,
+) -> Path:
+    out_dir = _model_output_dir(cfg, region=region, model=model)
+    direct = out_dir / filename
+
+    if direct.exists():
+        return direct
+
+    matches = sorted(out_dir.glob(f"**/{filename}"))
+    if matches:
+        return matches[0]
+
+    raise FileNotFoundError(f"Could not find {filename} in {out_dir}")
+
+
+def _find_region_lut_path(cfg: GBRConfig, region: str) -> Path:
+    main_path = _cfg_main_path(cfg)
+
+    candidates = [
+        main_path / "Regions" / f"{region}_Subcat_Regions_LUT.csv",
+        main_path.parent / "Regions" / f"{region}_Subcat_Regions_LUT.csv",
+        main_path / f"{region}_Subcat_Regions_LUT.csv",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    search_roots = [
+        main_path / "Regions",
+        main_path.parent / "Regions",
+        main_path,
+        main_path.parent,
+    ]
+
+    for root in search_roots:
+        if root.exists():
+            matches = sorted(root.glob(f"**/{region}_Subcat_Regions_LUT*.csv"))
+            if matches:
+                return matches[0]
+
+    raise FileNotFoundError(
+        f"Could not find LUT for {region}. Expected file like "
+        f"{region}_Subcat_Regions_LUT.csv"
+    )
+
+
+def load_landuse_rainfall_inputs(
+    cfg: GBRConfig,
+    regions: list[str] | None = None,
+    model: str = DEFAULT_MODEL,
+) -> tuple[
+    dict[str, pd.DataFrame],
+    dict[str, pd.DataFrame],
+    dict[str, pd.DataFrame],
+    dict[str, pd.DataFrame],
+]:
+    """
+    Load fuAreasTable, climateTable, ParameterTable and region LUT tables
+    for selected regions.
+    """
+    selected = _selected_regions(cfg, regions)
+
+    fu_area_tables: dict[str, pd.DataFrame] = {}
+    climate_tables: dict[str, pd.DataFrame] = {}
+    parameter_tables: dict[str, pd.DataFrame] = {}
+    reg_lut_tables: dict[str, pd.DataFrame] = {}
+
+    for region in selected:
+        fu_area_tables[region] = _read_csv(
+            _find_table_path(cfg, region, "fuAreasTable.csv", model=model)
+        )
+        climate_tables[region] = _read_csv(
+            _find_table_path(cfg, region, "climateTable.csv", model=model)
+        )
+
+        try:
+            parameter_tables[region] = _read_csv(
+                _find_table_path(cfg, region, "ParameterTable.csv", model=model)
+            )
+        except FileNotFoundError:
+            parameter_tables[region] = pd.DataFrame()
+
+        reg_lut_tables[region] = _read_csv(_find_region_lut_path(cfg, region))
+
+    return fu_area_tables, climate_tables, parameter_tables, reg_lut_tables
+
+
+# =========================================================
+# LUT normalisation
+# =========================================================
+
 def _normalise_lut(
     reg_lut_raw: pd.DataFrame,
     region: str,
@@ -92,12 +327,12 @@ def _normalise_lut(
     Standardise LUT columns to:
     - ModelElement
     - Basin_35
-    - Manag_Unit_48 (if present)
+    - Manag_Unit_48 if present
     - Region
     """
     lut_key_col = find_column(
         reg_lut_raw,
-        ["ModelElement", "SUBCAT", "Subcat", "subcat"],
+        ["ModelElement", "SUBCAT", "Subcat", "subcat", "Reg_SC"],
         "regLUT",
     )
     lut_basin35_col = find_column(
@@ -107,7 +342,7 @@ def _normalise_lut(
     )
 
     lut_mu48_col = None
-    for c in ["Manag_Unit_48", "Manag Unit 48", "Management_Unit_48"]:
+    for c in ["Manag_Unit_48", "Manag Unit 48", "Management_Unit_48", "MU_48"]:
         if c in reg_lut_raw.columns:
             lut_mu48_col = c
             break
@@ -115,26 +350,26 @@ def _normalise_lut(
     if require_mu48 and lut_mu48_col is None:
         raise KeyError(f"No Manag_Unit_48 column found in LUT for {region}")
 
-    reg_lut = reg_lut_raw.rename(columns={
-        lut_key_col: "ModelElement",
-        lut_basin35_col: "Basin_35",
-    }).copy()
+    reg_lut = reg_lut_raw.rename(
+        columns={
+            lut_key_col: "ModelElement",
+            lut_basin35_col: "Basin_35",
+        }
+    ).copy()
 
     if lut_mu48_col is not None:
         reg_lut = reg_lut.rename(columns={lut_mu48_col: "Manag_Unit_48"})
 
+    reg_lut["ModelElement"] = _normalise_id(reg_lut["ModelElement"])
     reg_lut["Region"] = region
 
     keep_cols = ["ModelElement", "Basin_35", "Region"]
     if "Manag_Unit_48" in reg_lut.columns:
         keep_cols.append("Manag_Unit_48")
 
-    lut_dup_before = _check_duplicates(
-        reg_lut[keep_cols].copy(),
-        ["ModelElement"],
-    )
-
+    lut_dup_before = _check_duplicates(reg_lut[keep_cols].copy(), ["ModelElement"])
     reg_lut = reg_lut[keep_cols].drop_duplicates(subset=["ModelElement"]).copy()
+
     return reg_lut, lut_dup_before
 
 
@@ -148,15 +383,6 @@ def summarise_region_fu_area(
     area_col: Optional[str] = None,
     fu_col: str = "FU",
 ) -> pd.DataFrame:
-    """
-    Build one-region FU area summary from fuAreasTable.
-
-    Returns
-    -------
-    DataFrame
-        Index = FU categories
-        Column = single value column named 'Area_m2'
-    """
     if fu_order is None:
         fu_order = DEFAULT_FU_ORDER
 
@@ -239,15 +465,19 @@ def summarise_region_stream_length(
     value_col: str = "VALUE",
     target_parameter: str = "Link Length",
 ) -> float:
+    if parameter_table.empty:
+        return 0.0
+
     _ensure_columns(parameter_table, [parameter_col, value_col], "parameter_table")
 
     lengths = parameter_table.loc[
         parameter_table[parameter_col].astype(str).str.strip() == target_parameter,
-        [value_col]
+        [value_col],
     ].copy()
 
     lengths[value_col] = pd.to_numeric(lengths[value_col], errors="coerce")
     total_length_km = lengths[value_col].sum() * M_TO_KM
+
     return float(total_length_km)
 
 
@@ -308,7 +538,7 @@ def build_land_use_stream_summary(
         "Grazing": "Grazing (ha)",
         "Horticulture": "Horticulture (ha)",
         "Stream": "Stream (km)",
-        "Sugarcane": "Sugracane (ha)",
+        "Sugarcane": "Sugarcane (ha)",
         "Urban + Other": "Urban + Other (ha)",
     }
     out = out.rename(columns=rename_map)
@@ -329,16 +559,6 @@ def prepare_region_fu_area_table(
     region: str,
     fus_of_interest: Optional[List[str]] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, pd.DataFrame], Dict[str, float]]:
-    """
-    Prepare merged FU-area-LUT table for one region.
-
-    Returns
-    -------
-    fu_area_df : DataFrame
-        Positive-area merged FU table at ModelElement-FU level.
-    qa_tables : dict[str, DataFrame]
-    qa_metrics : dict[str, float]
-    """
     reg_lut, lut_dup_before = _normalise_lut(
         reg_lut_raw=reg_lut_raw,
         region=region,
@@ -347,19 +567,24 @@ def prepare_region_fu_area_table(
 
     fuarea_key_col = find_column(
         fu_areas_df_raw,
-        ["Catchment", "ModelElement", "SUBCAT", "Subcat"],
+        ["Catchment", "ModelElement", "SUBCAT", "Subcat", "Reg_SC"],
         "fuAreas_df",
     )
     fuarea_fu_col = find_column(fu_areas_df_raw, ["FU", "Functional Unit"], "fuAreas_df")
     fuarea_area_col = find_column(fu_areas_df_raw, ["Area", "Area_m2", "Area (m2)"], "fuAreas_df")
 
-    fu_areas_df = fu_areas_df_raw.rename(columns={
-        fuarea_key_col: "ModelElement",
-        fuarea_fu_col: "FU",
-        fuarea_area_col: "Area_m2",
-    }).copy()
+    fu_areas_df = fu_areas_df_raw.rename(
+        columns={
+            fuarea_key_col: "ModelElement",
+            fuarea_fu_col: "FU",
+            fuarea_area_col: "Area_m2",
+        }
+    ).copy()
 
     fu_areas_df = fu_areas_df[["ModelElement", "FU", "Area_m2"]].copy()
+    fu_areas_df["ModelElement"] = _normalise_id(fu_areas_df["ModelElement"])
+    fu_areas_df["FU"] = fu_areas_df["FU"].astype(str).str.strip()
+    fu_areas_df["Area_m2"] = pd.to_numeric(fu_areas_df["Area_m2"], errors="coerce").fillna(0.0)
 
     if fus_of_interest is not None:
         fu_areas_df = fu_areas_df[fu_areas_df["FU"].isin(fus_of_interest)].copy()
@@ -374,17 +599,10 @@ def prepare_region_fu_area_table(
 
     area_before_lut_merge = float(fu_areas_df["Area_m2"].sum())
 
-    fu_area_df = pd.merge(
-        fu_areas_df,
-        reg_lut,
-        on="ModelElement",
-        how="left",
-    )
-
+    fu_area_df = pd.merge(fu_areas_df, reg_lut, on="ModelElement", how="left")
     area_after_lut_merge = float(fu_area_df["Area_m2"].sum())
 
     unmatched_lut_df = fu_area_df[fu_area_df["Manag_Unit_48"].isna()].copy()
-
     fu_area_df = fu_area_df[fu_area_df["Area_m2"] > 0].copy()
 
     qa_tables = {
@@ -405,9 +623,6 @@ def prepare_region_fu_area_table(
 def collapse_region_fu_area_outputs(
     fu_area_df: pd.DataFrame,
 ) -> Dict[str, pd.DataFrame]:
-    """
-    Create ModelElement×FU / MU48×FU / Region×FU summaries for one region.
-    """
     subcat_fu_df = (
         fu_area_df
         .groupby(["Region", "ModelElement", "Basin_35", "Manag_Unit_48", "FU"], as_index=False)
@@ -421,14 +636,27 @@ def collapse_region_fu_area_outputs(
         .groupby(["Region", "ModelElement"], as_index=False)
         .agg(SubcatTotalArea_m2=("Area_m2", "sum"))
     )
-    subcat_fu_df = pd.merge(
-        subcat_fu_df,
-        subcat_total_area,
-        on=["Region", "ModelElement"],
-        how="left",
-    )
+    subcat_fu_df = pd.merge(subcat_fu_df, subcat_total_area, on=["Region", "ModelElement"], how="left")
     subcat_fu_df["Area_pct_of_SUBCAT"] = (
-        subcat_fu_df["Area_m2"] / subcat_fu_df["SubcatTotalArea_m2"] * 100.0
+        _safe_divide(subcat_fu_df["Area_m2"], subcat_fu_df["SubcatTotalArea_m2"]) * 100.0
+    )
+
+    basin35_fu_df = (
+        fu_area_df
+        .groupby(["Region", "Basin_35", "FU"], as_index=False)
+        .agg(Area_m2=("Area_m2", "sum"))
+    )
+    basin35_fu_df["Area_ha"] = basin35_fu_df["Area_m2"] / 1e4
+    basin35_fu_df["Area_km2"] = basin35_fu_df["Area_m2"] / 1e6
+
+    basin35_total_area = (
+        basin35_fu_df
+        .groupby(["Region", "Basin_35"], as_index=False)
+        .agg(Basin35TotalArea_m2=("Area_m2", "sum"))
+    )
+    basin35_fu_df = pd.merge(basin35_fu_df, basin35_total_area, on=["Region", "Basin_35"], how="left")
+    basin35_fu_df["Area_pct_of_Basin35"] = (
+        _safe_divide(basin35_fu_df["Area_m2"], basin35_fu_df["Basin35TotalArea_m2"]) * 100.0
     )
 
     mu48_fu_df = (
@@ -445,14 +673,9 @@ def collapse_region_fu_area_outputs(
         .groupby(["Region", "Manag_Unit_48"], as_index=False)
         .agg(MU48TotalArea_m2=("Area_m2", "sum"))
     )
-    mu48_fu_df = pd.merge(
-        mu48_fu_df,
-        mu48_total_area,
-        on=["Region", "Manag_Unit_48"],
-        how="left",
-    )
+    mu48_fu_df = pd.merge(mu48_fu_df, mu48_total_area, on=["Region", "Manag_Unit_48"], how="left")
     mu48_fu_df["Area_pct_of_MU48"] = (
-        mu48_fu_df["Area_m2"] / mu48_fu_df["MU48TotalArea_m2"] * 100.0
+        _safe_divide(mu48_fu_df["Area_m2"], mu48_fu_df["MU48TotalArea_m2"]) * 100.0
     )
 
     region_fu_df = (
@@ -468,228 +691,19 @@ def collapse_region_fu_area_outputs(
         .groupby(["Region"], as_index=False)
         .agg(RegionTotalArea_m2=("Area_m2", "sum"))
     )
-    region_fu_df = pd.merge(
-        region_fu_df,
-        region_total_area,
-        on="Region",
-        how="left",
-    )
+    region_fu_df = pd.merge(region_fu_df, region_total_area, on="Region", how="left")
     region_fu_df["Area_pct_of_Region"] = (
-        region_fu_df["Area_m2"] / region_fu_df["RegionTotalArea_m2"] * 100.0
+        _safe_divide(region_fu_df["Area_m2"], region_fu_df["RegionTotalArea_m2"]) * 100.0
     )
 
     return {
         "fu_area": fu_area_df,
         "subcat_fu": subcat_fu_df,
+        "basin35_fu": basin35_fu_df,
         "mu48_fu": mu48_fu_df,
         "region_fu": region_fu_df,
     }
 
-
-def _build_single_constituent_fu_summary(
-    region_values_by_region: Dict[str, pd.Series | dict | pd.DataFrame],
-    region_order: List[str],
-    region_name_map: Optional[Dict[str, str]] = None,
-    fu_order: Optional[List[str]] = None,
-    fill_value: float = 0.0,
-) -> pd.DataFrame:
-    if region_name_map is None:
-        region_name_map = REGION_NAME_MAP
-    if fu_order is None:
-        fu_order = FU_LOAD_ORDER
-
-    rows = []
-
-    for region in region_order:
-        obj = region_values_by_region[region]
-
-        if isinstance(obj, pd.Series):
-            s = obj.copy()
-        elif isinstance(obj, dict):
-            s = pd.Series(obj, dtype=float)
-        elif isinstance(obj, pd.DataFrame):
-            if obj.shape[0] == 1:
-                s = obj.iloc[0].copy()
-            elif obj.shape[1] == 1:
-                s = obj.iloc[:, 0].copy()
-            else:
-                raise ValueError(
-                    f"Region {region} DataFrame must be single-row or single-column. Got shape={obj.shape}"
-                )
-        else:
-            raise TypeError(f"Unsupported regional object type for {region}: {type(obj)}")
-
-        s.index = s.index.astype(str)
-
-        if "Dryland Cropping" in s.index or "Irrigated Cropping" in s.index:
-            s["Cropping"] = s.get("Dryland Cropping", 0) + s.get("Irrigated Cropping", 0)
-
-        if "Urban + Other" not in s.index:
-            s["Urban + Other"] = s.get("Urban", 0) + s.get("Other", 0)
-
-        for fu in fu_order:
-            if fu not in s.index:
-                s[fu] = fill_value
-
-        s = s[fu_order]
-        s.name = region
-        rows.append(s)
-
-    out = pd.DataFrame(rows)
-    out.loc["GBR"] = out.fillna(fill_value).sum(axis=0)
-
-    pretty_index = [region_name_map.get(r, r) for r in region_order] + ["GBR"]
-    out.index = pretty_index
-
-    return out.fillna(fill_value)
-
-
-def build_fu_load_summary_tables(
-    region_load_to_regexport_fu: Dict[str, Dict[str, Dict[str, pd.Series | dict | pd.DataFrame]]],
-    constituents: List[str],
-    region_order: List[str],
-    scenario: str = "BASE",
-    fu_order: Optional[List[str]] = None,
-    kg_to_kt: float = 1e-6,
-    kg_to_t: float = 1e-3,
-    per_year: float = 1.0,
-    kt_constituents: Optional[List[str]] = None,
-) -> Dict[str, pd.DataFrame]:
-    if fu_order is None:
-        fu_order = FU_LOAD_ORDER
-    if kt_constituents is None:
-        kt_constituents = KT_CONSTITUENTS
-
-    results: Dict[str, pd.DataFrame] = {}
-
-    for con in constituents:
-        region_values = {}
-
-        for region in region_order:
-            raw = region_load_to_regexport_fu[region][scenario][con]
-
-            if isinstance(raw, pd.DataFrame):
-                if raw.shape[0] == 1:
-                    s = raw.iloc[0].copy()
-                elif raw.shape[1] == 1:
-                    s = raw.iloc[:, 0].copy()
-                else:
-                    s = raw.squeeze()
-            elif isinstance(raw, pd.Series):
-                s = raw.copy()
-            elif isinstance(raw, dict):
-                s = pd.Series(raw, dtype=float)
-            else:
-                raise TypeError(
-                    f"Unsupported load object type for region={region}, constituent={con}: {type(raw)}"
-                )
-
-            factor = kg_to_kt * per_year if con in kt_constituents else kg_to_t * per_year
-            s = pd.to_numeric(s, errors="coerce") * factor
-            region_values[region] = s
-
-        df = _build_single_constituent_fu_summary(
-            region_values_by_region=region_values,
-            region_order=region_order,
-            fu_order=fu_order,
-            fill_value=0.0,
-        )
-
-        if con in kt_constituents:
-            df.columns = [
-                "Banana (kt/year)",
-                "Conservation (kt/year)",
-                "Cropping (kt/year)",
-                "Dairy (kt/year)",
-                "Forestry (kt/year)",
-                "Grazing (kt/year)",
-                "Horticulture (kt/year)",
-                "Stream (kt/year)",
-                "Sugracane (kt/year)",
-                "Urban + Other (kt/year)",
-            ]
-        else:
-            df.columns = [
-                "Banana (t/year)",
-                "Conservation (t/year)",
-                "Cropping (t/year)",
-                "Dairy (t/year)",
-                "Forestry (t/year)",
-                "Grazing (t/year)",
-                "Horticulture (t/year)",
-                "Stream (t/year)",
-                "Sugracane (t/year)",
-                "Urban + Other (t/year)",
-            ]
-
-        results[con] = df.fillna(0).round(2)
-
-    return results
-
-
-def build_fu_areal_load_summary_tables(
-    fu_load_summary_tables: Dict[str, pd.DataFrame],
-    fu_area_summary: pd.DataFrame,
-    constituents: List[str],
-    t_to_kg: float = 1000.0,
-    kt_to_t: float = 1000.0,
-    kt_constituents: Optional[List[str]] = None,
-) -> Dict[str, pd.DataFrame]:
-    if kt_constituents is None:
-        kt_constituents = KT_CONSTITUENTS
-
-    results: Dict[str, pd.DataFrame] = {}
-
-    area_values = fu_area_summary.values.astype(float)
-
-    for con in constituents:
-        load_df = fu_load_summary_tables[con].copy()
-        load_values = load_df.values.astype(float)
-
-        with np.errstate(divide="ignore", invalid="ignore"):
-            if con in kt_constituents:
-                areal_values = (load_values * kt_to_t) / area_values
-            else:
-                areal_values = (load_values * t_to_kg) / area_values
-
-        areal_values = np.where(np.isfinite(areal_values), areal_values, 0.0)
-
-        out = pd.DataFrame(
-            areal_values,
-            index=load_df.index,
-            columns=load_df.columns,
-        ).round(3)
-
-        if con in kt_constituents:
-            out.columns = [
-                "Banana (t/ha/year)",
-                "Conservation (t/ha/year)",
-                "Cropping (t/ha/year)",
-                "Dairy (t/ha/year)",
-                "Forestry (t/ha/year)",
-                "Grazing (t/ha/year)",
-                "Horticulture (t/ha/year)",
-                "Stream (t/km/year)",
-                "Sugracane (t/ha/year)",
-                "Urban + Other (t/ha/year)",
-            ]
-        else:
-            out.columns = [
-                "Banana (kg/ha/year)",
-                "Conservation (kg/ha/year)",
-                "Cropping (kg/ha/year)",
-                "Dairy (kg/ha/year)",
-                "Forestry (kg/ha/year)",
-                "Grazing (kg/ha/year)",
-                "Horticulture (kg/ha/year)",
-                "Stream (kg/km/year)",
-                "Sugracane (kg/ha/year)",
-                "Urban + Other (kg/ha/year)",
-            ]
-
-        results[con] = out.fillna(0)
-
-    return results
 
 def build_land_use_detailed_summary_across_regions(
     fu_area_tables_by_region: Dict[str, pd.DataFrame],
@@ -697,26 +711,12 @@ def build_land_use_detailed_summary_across_regions(
     region_order: Optional[List[str]] = None,
     fus_of_interest: Optional[List[str]] = None,
 ) -> Dict[str, pd.DataFrame]:
-    """
-    Full detailed land-use workflow across all 6 regions.
-
-    Returns
-    -------
-    dict[str, DataFrame]
-        Keys:
-        - fu_area_all
-        - subcat_fu
-        - mu48_fu
-        - mu48_area_wide
-        - mu48_pct_wide
-        - region_fu
-        - qa_summary
-    """
     if region_order is None:
         region_order = list(fu_area_tables_by_region.keys())
 
     fuarea_by_region = {}
     subcat_fu_by_region = {}
+    basin35_fu_by_region = {}
     mu48_fu_by_region = {}
     region_fu_by_region = {}
 
@@ -734,6 +734,7 @@ def build_land_use_detailed_summary_across_regions(
 
         fuarea_by_region[region] = collapsed["fu_area"]
         subcat_fu_by_region[region] = collapsed["subcat_fu"]
+        basin35_fu_by_region[region] = collapsed["basin35_fu"]
         mu48_fu_by_region[region] = collapsed["mu48_fu"]
         region_fu_by_region[region] = collapsed["region_fu"]
 
@@ -745,59 +746,39 @@ def build_land_use_detailed_summary_across_regions(
             "Area_after_LUT_merge_m2": qa_metrics["Area_after_LUT_merge_m2"],
             "Unmatched_LUT_rows": int(qa_metrics["Unmatched_LUT_rows"]),
             "SubcatFU_rows": len(collapsed["subcat_fu"]),
+            "Basin35FU_rows": len(collapsed["basin35_fu"]),
             "MU48FU_rows": len(collapsed["mu48_fu"]),
             "RegionFU_rows": len(collapsed["region_fu"]),
         })
 
     fu_area_all_df = pd.concat([fuarea_by_region[r] for r in region_order], ignore_index=True)
     subcat_fu_all_df = pd.concat([subcat_fu_by_region[r] for r in region_order], ignore_index=True)
+    basin35_fu_all_df = pd.concat([basin35_fu_by_region[r] for r in region_order], ignore_index=True)
     mu48_fu_all_df = pd.concat([mu48_fu_by_region[r] for r in region_order], ignore_index=True)
     region_fu_all_df = pd.concat([region_fu_by_region[r] for r in region_order], ignore_index=True)
 
+    basin35_area_wide_df = (
+        basin35_fu_all_df
+        .pivot_table(index=["Region", "Basin_35"], columns="FU", values="Area_ha", aggfunc="sum", fill_value=0)
+        .reset_index()
+    )
+
+    basin35_pct_wide_df = (
+        basin35_fu_all_df
+        .pivot_table(index=["Region", "Basin_35"], columns="FU", values="Area_pct_of_Basin35", aggfunc="sum", fill_value=0)
+        .reset_index()
+    )
+
     mu48_area_wide_df = (
         mu48_fu_all_df
-        .pivot_table(
-            index=["Region", "Manag_Unit_48"],
-            columns="FU",
-            values="Area_ha",
-            aggfunc="sum",
-            fill_value=0,
-        )
+        .pivot_table(index=["Region", "Manag_Unit_48"], columns="FU", values="Area_ha", aggfunc="sum", fill_value=0)
         .reset_index()
     )
 
     mu48_pct_wide_df = (
         mu48_fu_all_df
-        .pivot_table(
-            index=["Region", "Manag_Unit_48"],
-            columns="FU",
-            values="Area_pct_of_MU48",
-            aggfunc="sum",
-            fill_value=0,
-        )
+        .pivot_table(index=["Region", "Manag_Unit_48"], columns="FU", values="Area_pct_of_MU48", aggfunc="sum", fill_value=0)
         .reset_index()
-    )
-
-    mu48_total_area_df = (
-        mu48_fu_all_df[["Region", "Manag_Unit_48", "MU48TotalArea_m2"]]
-        .drop_duplicates()
-        .copy()
-    )
-    mu48_total_area_df["MU48TotalArea_ha"] = mu48_total_area_df["MU48TotalArea_m2"] / 1e4
-    mu48_total_area_df["MU48TotalArea_km2"] = mu48_total_area_df["MU48TotalArea_m2"] / 1e6
-
-    mu48_area_wide_df = pd.merge(
-        mu48_total_area_df[["Region", "Manag_Unit_48", "MU48TotalArea_ha", "MU48TotalArea_km2"]],
-        mu48_area_wide_df,
-        on=["Region", "Manag_Unit_48"],
-        how="left",
-    )
-
-    mu48_pct_wide_df = pd.merge(
-        mu48_total_area_df[["Region", "Manag_Unit_48"]],
-        mu48_pct_wide_df,
-        on=["Region", "Manag_Unit_48"],
-        how="left",
     )
 
     qa_summary_df = pd.DataFrame(qa_summary_rows).sort_values("Region")
@@ -805,7 +786,10 @@ def build_land_use_detailed_summary_across_regions(
     return {
         "fu_area_all": fu_area_all_df,
         "subcat_fu": subcat_fu_all_df.sort_values(["Region", "ModelElement", "FU"]),
+        "basin35_fu": basin35_fu_all_df.sort_values(["Region", "Basin_35", "FU"]),
         "mu48_fu": mu48_fu_all_df.sort_values(["Region", "Manag_Unit_48", "FU"]),
+        "basin35_area_wide": basin35_area_wide_df.sort_values(["Region", "Basin_35"]),
+        "basin35_pct_wide": basin35_pct_wide_df.sort_values(["Region", "Basin_35"]),
         "mu48_area_wide": mu48_area_wide_df.sort_values(["Region", "Manag_Unit_48"]),
         "mu48_pct_wide": mu48_pct_wide_df.sort_values(["Region", "Manag_Unit_48"]),
         "region_fu": region_fu_all_df.sort_values(["Region", "FU"]),
@@ -832,7 +816,7 @@ def prepare_region_rainfall_table(
 
     climate_key_col = find_column(
         climate_df_raw,
-        ["Catchment", "ModelElement", "SUBCAT", "Subcat"],
+        ["Catchment", "ModelElement", "SUBCAT", "Subcat", "Reg_SC"],
         "climate_df",
     )
     climate_fu_col = find_column(climate_df_raw, ["FU", "Functional Unit"], "climate_df")
@@ -845,34 +829,45 @@ def prepare_region_rainfall_table(
 
     fuarea_key_col = find_column(
         fu_areas_df_raw,
-        ["Catchment", "ModelElement", "SUBCAT", "Subcat"],
+        ["Catchment", "ModelElement", "SUBCAT", "Subcat", "Reg_SC"],
         "fuAreas_df",
     )
     fuarea_fu_col = find_column(fu_areas_df_raw, ["FU", "Functional Unit"], "fuAreas_df")
     fuarea_area_col = find_column(fu_areas_df_raw, ["Area", "Area_m2", "Area (m2)"], "fuAreas_df")
 
-    climate_df = climate_df_raw.rename(columns={
-        climate_key_col: "ModelElement",
-        climate_fu_col: "FU",
-        climate_element_col: "Element",
-        climate_rain_col: "Rainfall_m_total",
-    }).copy()
+    climate_df = climate_df_raw.rename(
+        columns={
+            climate_key_col: "ModelElement",
+            climate_fu_col: "FU",
+            climate_element_col: "Element",
+            climate_rain_col: "Rainfall_m_total",
+        }
+    ).copy()
 
-    fu_areas_df = fu_areas_df_raw.rename(columns={
-        fuarea_key_col: "ModelElement",
-        fuarea_fu_col: "FU",
-        fuarea_area_col: "Area_m2",
-    }).copy()
+    fu_areas_df = fu_areas_df_raw.rename(
+        columns={
+            fuarea_key_col: "ModelElement",
+            fuarea_fu_col: "FU",
+            fuarea_area_col: "Area_m2",
+        }
+    ).copy()
+
+    climate_df["ModelElement"] = _normalise_id(climate_df["ModelElement"])
+    climate_df["FU"] = climate_df["FU"].astype(str).str.strip()
+    fu_areas_df["ModelElement"] = _normalise_id(fu_areas_df["ModelElement"])
+    fu_areas_df["FU"] = fu_areas_df["FU"].astype(str).str.strip()
 
     climate_rain_df = climate_df.loc[
-        climate_df["Element"] == "Rainfall",
-        ["ModelElement", "FU", "Rainfall_m_total"]
+        climate_df["Element"].astype(str).str.strip().str.lower() == "rainfall",
+        ["ModelElement", "FU", "Rainfall_m_total"],
     ].copy()
 
+    climate_rain_df["Rainfall_m_total"] = pd.to_numeric(climate_rain_df["Rainfall_m_total"], errors="coerce").fillna(0.0)
     climate_rain_df["Rainfall_mm_total"] = climate_rain_df["Rainfall_m_total"] * 1000.0
     climate_rain_df["Rainfall_mm_annual"] = climate_rain_df["Rainfall_mm_total"] / n_years
 
     fu_areas_df = fu_areas_df[["ModelElement", "FU", "Area_m2"]].copy()
+    fu_areas_df["Area_m2"] = pd.to_numeric(fu_areas_df["Area_m2"], errors="coerce").fillna(0.0)
 
     climate_dups = _check_duplicates(climate_rain_df, ["ModelElement", "FU"])
     fuarea_dups = _check_duplicates(fu_areas_df, ["ModelElement", "FU"])
@@ -901,27 +896,16 @@ def prepare_region_rainfall_table(
         indicator=True,
     )
 
-    rain_area_df = pd.merge(
-        climate_rain_df,
-        fu_areas_df,
-        on=["ModelElement", "FU"],
-        how="inner",
-    )
+    rain_area_df = pd.merge(climate_rain_df, fu_areas_df, on=["ModelElement", "FU"], how="inner")
 
     if rain_area_df.empty:
         raise ValueError(f"No rows after joining rainfall and FU area for region {region}")
 
     area_after_fu_merge = float(rain_area_df["Area_m2"].sum())
 
-    rain_area_df = pd.merge(
-        rain_area_df,
-        reg_lut,
-        on="ModelElement",
-        how="left",
-    )
+    rain_area_df = pd.merge(rain_area_df, reg_lut, on="ModelElement", how="left")
 
     area_after_lut_merge = float(rain_area_df["Area_m2"].sum())
-
     unmatched_lut_df = rain_area_df[rain_area_df["Basin_35"].isna()].copy()
 
     rain_area_df = rain_area_df[rain_area_df["Area_m2"] > 0].copy()
@@ -979,8 +963,8 @@ def collapse_region_rainfall_outputs(
             BasinRainArea_annual=("rain_x_area_annual", "sum"),
         )
     )
-    basin_df["annual_rainfall_mm"] = basin_df["BasinRainArea_annual"] / basin_df["BasinArea_m2"]
-    basin_df["total_rainfall_mm_30yr"] = basin_df["BasinRainArea_total"] / basin_df["BasinArea_m2"]
+    basin_df["annual_rainfall_mm"] = _safe_divide(basin_df["BasinRainArea_annual"], basin_df["BasinArea_m2"])
+    basin_df["total_rainfall_mm_30yr"] = _safe_divide(basin_df["BasinRainArea_total"], basin_df["BasinArea_m2"])
     basin_df["BasinArea_km2"] = basin_df["BasinArea_m2"] / 1e6
 
     if "Manag_Unit_48" in subcat_df.columns:
@@ -994,15 +978,22 @@ def collapse_region_rainfall_outputs(
                 MU48RainArea_annual=("rain_x_area_annual", "sum"),
             )
         )
-        mu48_df["annual_rainfall_mm"] = mu48_df["MU48RainArea_annual"] / mu48_df["MU48Area_m2"]
-        mu48_df["total_rainfall_mm_30yr"] = mu48_df["MU48RainArea_total"] / mu48_df["MU48Area_m2"]
+        mu48_df["annual_rainfall_mm"] = _safe_divide(mu48_df["MU48RainArea_annual"], mu48_df["MU48Area_m2"])
+        mu48_df["total_rainfall_mm_30yr"] = _safe_divide(mu48_df["MU48RainArea_total"], mu48_df["MU48Area_m2"])
         mu48_df["MU48Area_km2"] = mu48_df["MU48Area_m2"] / 1e6
     else:
-        mu48_df = pd.DataFrame(columns=[
-            "Manag_Unit_48", "Region", "MU48Area_m2", "MU48RainArea_total",
-            "MU48RainArea_annual", "annual_rainfall_mm",
-            "total_rainfall_mm_30yr", "MU48Area_km2"
-        ])
+        mu48_df = pd.DataFrame(
+            columns=[
+                "Manag_Unit_48",
+                "Region",
+                "MU48Area_m2",
+                "MU48RainArea_total",
+                "MU48RainArea_annual",
+                "annual_rainfall_mm",
+                "total_rainfall_mm_30yr",
+                "MU48Area_km2",
+            ]
+        )
 
     return {
         "rain_area": rain_area_df,
@@ -1028,6 +1019,9 @@ def build_rainfall_summary_across_regions(
     mu48_by_region = {}
 
     qa_summary_rows = []
+    qa_key_check_frames = []
+    qa_unmatched_frames = []
+    qa_inconsistent_frames = []
 
     for region in region_order:
         rain_area_df, qa_tables, qa_metrics = prepare_region_rainfall_table(
@@ -1044,6 +1038,20 @@ def build_rainfall_summary_across_regions(
         subcat_by_region[region] = collapsed["subcat"]
         basin_by_region[region] = collapsed["basin35"]
         mu48_by_region[region] = collapsed["mu48"]
+
+        key_check = qa_tables["key_check"].copy()
+        key_check.insert(0, "Region", region)
+        qa_key_check_frames.append(key_check)
+
+        unmatched = qa_tables["unmatched_lut"].copy()
+        if not unmatched.empty:
+            unmatched.insert(0, "Region_QA", region)
+            qa_unmatched_frames.append(unmatched)
+
+        inconsistent = qa_tables["inconsistent_rain"].copy()
+        if not inconsistent.empty:
+            inconsistent.insert(0, "Region_QA", region)
+            qa_inconsistent_frames.append(inconsistent)
 
         qa_summary_rows.append({
             "Region": region,
@@ -1077,8 +1085,8 @@ def build_rainfall_summary_across_regions(
             RegionRainArea_annual=("rain_x_area_annual", "sum"),
         )
     )
-    region_df["annual_rainfall_mm"] = region_df["RegionRainArea_annual"] / region_df["RegionArea_m2"]
-    region_df["total_rainfall_mm_30yr"] = region_df["RegionRainArea_total"] / region_df["RegionArea_m2"]
+    region_df["annual_rainfall_mm"] = _safe_divide(region_df["RegionRainArea_annual"], region_df["RegionArea_m2"])
+    region_df["total_rainfall_mm_30yr"] = _safe_divide(region_df["RegionRainArea_total"], region_df["RegionArea_m2"])
     region_df["RegionArea_km2"] = region_df["RegionArea_m2"] / 1e6
     region_df = region_df[
         ["Region", "annual_rainfall_mm", "total_rainfall_mm_30yr", "RegionArea_m2", "RegionArea_km2"]
@@ -1094,8 +1102,8 @@ def build_rainfall_summary_across_regions(
         )
         .reset_index(drop=True)
     )
-    gbr_df["annual_rainfall_mm"] = gbr_df["GBRRainArea_annual"] / gbr_df["GBRArea_m2"]
-    gbr_df["total_rainfall_mm_30yr"] = gbr_df["GBRRainArea_total"] / gbr_df["GBRArea_m2"]
+    gbr_df["annual_rainfall_mm"] = _safe_divide(gbr_df["GBRRainArea_annual"], gbr_df["GBRArea_m2"])
+    gbr_df["total_rainfall_mm_30yr"] = _safe_divide(gbr_df["GBRRainArea_total"], gbr_df["GBRArea_m2"])
     gbr_df["GBRArea_km2"] = gbr_df["GBRArea_m2"] / 1e6
     gbr_df.insert(0, "Region", "GBR")
     gbr_df = gbr_df[
@@ -1122,4 +1130,194 @@ def build_rainfall_summary_across_regions(
         "gbr": gbr_df,
         "mu48": mu48_df,
         "qa_summary": qa_summary_df,
+        "qa_key_check": pd.concat(qa_key_check_frames, ignore_index=True) if qa_key_check_frames else pd.DataFrame(),
+        "qa_unmatched_lut": pd.concat(qa_unmatched_frames, ignore_index=True) if qa_unmatched_frames else pd.DataFrame(),
+        "qa_inconsistent_rain": pd.concat(qa_inconsistent_frames, ignore_index=True) if qa_inconsistent_frames else pd.DataFrame(),
     }
+
+
+# =========================================================
+# Combined package workflow
+# =========================================================
+
+def build_landuse_rainfall_summary(
+    cfg: GBRConfig,
+    regions: list[str] | None = None,
+    model: str = DEFAULT_MODEL,
+) -> Dict[str, pd.DataFrame]:
+    selected = _selected_regions(cfg, regions)
+
+    fu_area_tables, climate_tables, parameter_tables, reg_lut_tables = load_landuse_rainfall_inputs(
+        cfg=cfg,
+        regions=selected,
+        model=model,
+    )
+
+    land_use_stream = build_land_use_stream_summary(
+        fu_area_tables_by_region=fu_area_tables,
+        parameter_tables_by_region=parameter_tables,
+        region_order=selected,
+    )
+
+    landuse = build_land_use_detailed_summary_across_regions(
+        fu_area_tables_by_region=fu_area_tables,
+        reg_lut_tables_by_region=reg_lut_tables,
+        region_order=selected,
+        fus_of_interest=None,
+    )
+
+    rainfall = build_rainfall_summary_across_regions(
+        climate_tables_by_region=climate_tables,
+        fu_area_tables_by_region=fu_area_tables,
+        reg_lut_tables_by_region=reg_lut_tables,
+        region_order=selected,
+        n_years=_cfg_model_years(cfg),
+    )
+
+    basin35_rainfall_landuse = pd.merge(
+        rainfall["basin35"],
+        landuse["basin35_area_wide"],
+        on=["Region", "Basin_35"],
+        how="left",
+    )
+
+    mu48_rainfall_landuse = pd.merge(
+        rainfall["mu48"],
+        landuse["mu48_area_wide"],
+        on=["Region", "Manag_Unit_48"],
+        how="left",
+    )
+
+    qa_summary = pd.merge(
+        landuse["qa_summary"],
+        rainfall["qa_summary"],
+        on="Region",
+        how="outer",
+        suffixes=("_landuse", "_rainfall"),
+    )
+
+    return {
+        "land_use_stream_summary": land_use_stream,
+        "fu_area_all": landuse["fu_area_all"],
+        "subcat_fu_area": landuse["subcat_fu"],
+        "basin35_fu_area": landuse["basin35_fu"],
+        "mu48_fu_area": landuse["mu48_fu"],
+        "region_fu_area": landuse["region_fu"],
+        "basin35_area_wide": landuse["basin35_area_wide"],
+        "basin35_pct_wide": landuse["basin35_pct_wide"],
+        "mu48_area_wide": landuse["mu48_area_wide"],
+        "mu48_pct_wide": landuse["mu48_pct_wide"],
+        "rainfall_all": rainfall["rain_all"],
+        "rainfall_subcat": rainfall["subcat"],
+        "rainfall_basin35": rainfall["basin35"],
+        "rainfall_mu48": rainfall["mu48"],
+        "rainfall_region": rainfall["region"],
+        "rainfall_gbr": rainfall["gbr"],
+        "landuse_rainfall_basin35": basin35_rainfall_landuse,
+        "landuse_rainfall_mu48": mu48_rainfall_landuse,
+        "qa_summary": qa_summary,
+        "qa_key_check": rainfall["qa_key_check"],
+        "qa_unmatched_lut": rainfall["qa_unmatched_lut"],
+        "qa_inconsistent_rain": rainfall["qa_inconsistent_rain"],
+    }
+
+
+def run_landuse_rainfall_summary(
+    cfg: GBRConfig,
+    output_dir: str | Path,
+    constituents: list[str] | None = None,
+    value_column: str = "LoadToRegExport (kg)",
+    units: str = "report",
+    process_model: str = "BASE",
+    regions: list[str] | None = None,
+    bundle_dirs: dict[str, Path] | None = None,
+) -> dict[str, object]:
+    """
+    Bundle-compatible runner.
+
+    Arguments constituents, value_column, units and bundle_dirs are accepted
+    for wrapper compatibility.
+    """
+    out_dir = ensure_output_dir(output_dir)
+
+    model = process_model or DEFAULT_MODEL
+
+    result = build_landuse_rainfall_summary(
+        cfg=cfg,
+        regions=regions if regions is not None else getattr(cfg, "regions", None),
+        model=model,
+    )
+
+    files: dict[str, Path] = {}
+
+    csv_outputs = {
+        "landuse_stream_summary_csv": ("land_use_stream_summary", "landuse_stream_summary.csv"),
+        "landuse_fu_area_all_csv": ("fu_area_all", "landuse_fu_area_all.csv"),
+        "landuse_subcat_fu_area_csv": ("subcat_fu_area", "landuse_subcat_fu_area.csv"),
+        "landuse_basin35_fu_area_csv": ("basin35_fu_area", "landuse_basin35_fu_area.csv"),
+        "landuse_mu48_fu_area_csv": ("mu48_fu_area", "landuse_mu48_fu_area.csv"),
+        "landuse_region_fu_area_csv": ("region_fu_area", "landuse_region_fu_area.csv"),
+        "landuse_basin35_area_wide_csv": ("basin35_area_wide", "landuse_basin35_area_wide.csv"),
+        "landuse_basin35_pct_wide_csv": ("basin35_pct_wide", "landuse_basin35_pct_wide.csv"),
+        "landuse_mu48_area_wide_csv": ("mu48_area_wide", "landuse_mu48_area_wide.csv"),
+        "landuse_mu48_pct_wide_csv": ("mu48_pct_wide", "landuse_mu48_pct_wide.csv"),
+        "rainfall_all_csv": ("rainfall_all", "rainfall_all.csv"),
+        "rainfall_subcat_csv": ("rainfall_subcat", "rainfall_subcat.csv"),
+        "rainfall_basin35_csv": ("rainfall_basin35", "rainfall_basin35.csv"),
+        "rainfall_mu48_csv": ("rainfall_mu48", "rainfall_mu48.csv"),
+        "rainfall_region_csv": ("rainfall_region", "rainfall_region.csv"),
+        "rainfall_gbr_csv": ("rainfall_gbr", "rainfall_gbr.csv"),
+        "landuse_rainfall_basin35_csv": ("landuse_rainfall_basin35", "landuse_rainfall_basin35.csv"),
+        "landuse_rainfall_mu48_csv": ("landuse_rainfall_mu48", "landuse_rainfall_mu48.csv"),
+        "landuse_rainfall_qa_csv": ("qa_summary", "landuse_rainfall_qa_summary.csv"),
+    }
+
+    for file_key, (table_key, filename) in csv_outputs.items():
+        df = result.get(table_key, pd.DataFrame())
+        path = out_dir / filename
+        df.to_csv(path, index=False)
+        files[file_key] = path
+
+    optional_csv_outputs = {
+        "landuse_rainfall_qa_key_check_csv": ("qa_key_check", "qa_key_check_climate_vs_fuarea.csv"),
+        "landuse_rainfall_qa_unmatched_lut_csv": ("qa_unmatched_lut", "qa_unmatched_lut.csv"),
+        "landuse_rainfall_qa_inconsistent_rain_csv": ("qa_inconsistent_rain", "qa_inconsistent_rain.csv"),
+    }
+
+    for file_key, (table_key, filename) in optional_csv_outputs.items():
+        df = result.get(table_key, pd.DataFrame())
+        if not df.empty:
+            path = out_dir / filename
+            df.to_csv(path, index=False)
+            files[file_key] = path
+
+    workbook_path = out_dir / "landuse_rainfall_summary.xlsx"
+    export_tables_to_excel(
+        tables={
+            "qa_summary": result["qa_summary"],
+            "landuse_stream": result["land_use_stream_summary"],
+            "rainfall_region": result["rainfall_region"],
+            "rainfall_gbr": result["rainfall_gbr"],
+            "rainfall_basin35": result["rainfall_basin35"],
+            "rainfall_mu48": result["rainfall_mu48"],
+            "landuse_region_fu": result["region_fu_area"],
+            "landuse_basin35_fu": result["basin35_fu_area"],
+            "landuse_mu48_fu": result["mu48_fu_area"],
+            "basin35_area_wide": result["basin35_area_wide"],
+            "basin35_pct_wide": result["basin35_pct_wide"],
+            "mu48_area_wide": result["mu48_area_wide"],
+            "mu48_pct_wide": result["mu48_pct_wide"],
+            "combined_basin35": result["landuse_rainfall_basin35"],
+            "combined_mu48": result["landuse_rainfall_mu48"],
+        },
+        output_path=workbook_path,
+        index=False,
+    )
+    files["landuse_rainfall_workbook"] = workbook_path
+
+    result["files"] = files
+    return result
+
+
+def export_landuse_rainfall_summary(*args: Any, **kwargs: Any) -> dict[str, object]:
+    return run_landuse_rainfall_summary(*args, **kwargs)

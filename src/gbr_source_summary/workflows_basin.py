@@ -7,10 +7,17 @@ Supported aggregation scales:
 - Basin_35
 - Manag_Unit_48
 - WQI
+
+Important
+---------
+For bundle execution, run_basin_summary() first reuses the already-generated
+core report-card basin summary from 01_report_card_summary. This avoids
+re-reading and re-merging large RegContributorDataGrid files.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Dict
 
 import pandas as pd
@@ -21,6 +28,8 @@ from .comparison import (
     calc_reduction,
     calc_percent_reduction,
 )
+from .export import ensure_output_dir
+from .export_excel import export_tables_to_excel
 from .workflows_fu import build_fu_export_summaries, resolve_basin_column
 
 
@@ -28,9 +37,6 @@ def _add_raw_units(
     df: pd.DataFrame,
     value_column: str,
 ) -> pd.DataFrame:
-    """
-    Add raw load units to long-format grouped table.
-    """
     out = df.copy()
     out[value_column] = pd.to_numeric(out[value_column], errors="coerce").fillna(0.0)
     out["Units"] = "kg"
@@ -38,9 +44,6 @@ def _add_raw_units(
 
 
 def _report_unit_for_constituent(constituent: str | None) -> str:
-    """
-    Return the report-card unit for a constituent.
-    """
     key = str(constituent).strip().upper() if constituent is not None else ""
     if key in {"FS", "CS"}:
         return "kt/yr"
@@ -53,20 +56,6 @@ def _convert_basin_report_units(
     value_column: str,
     model_years: float,
 ) -> pd.DataFrame:
-    """
-    Convert basin long-format grouped load table from total kg over model period
-    to report-card annual units.
-
-    Expected columns
-    ----------------
-    - Constituent
-    - value_column
-
-    Conversion
-    ----------
-    - FS, CS -> kt/yr
-    - all others -> t/yr
-    """
     required = ["Constituent", value_column]
     missing = [c for c in required if c not in df.columns]
     if missing:
@@ -77,44 +66,16 @@ def _convert_basin_report_units(
     out = df.copy()
     out[value_column] = pd.to_numeric(out[value_column], errors="coerce").fillna(0.0)
 
-    mask_fs = out["Constituent"].isin(["FS", "CS"])
+    sediment_mask = out["Constituent"].astype(str).str.upper().isin(["FS", "CS"])
 
-    out.loc[mask_fs, value_column] = out.loc[mask_fs, value_column] / 1e6 / model_years
-    out.loc[~mask_fs, value_column] = out.loc[~mask_fs, value_column] / 1e3 / model_years
-
-    out["Units"] = out["Constituent"].apply(_report_unit_for_constituent)
-
-    return out
-
-
-def _wide_to_long_with_units(
-    df: pd.DataFrame,
-    value_name: str,
-    reporting_units: str,
-    model_years: int,
-) -> pd.DataFrame:
-    """
-    Convert wide comparison dataframe back to long format with units.
-    """
-    out = df.reset_index().melt(
-        id_vars=["Region", "Basin", "BasinScale"],
-        var_name="Constituent",
-        value_name=value_name,
+    out.loc[sediment_mask, value_column] = (
+        out.loc[sediment_mask, value_column] / 1e6 / model_years
+    )
+    out.loc[~sediment_mask, value_column] = (
+        out.loc[~sediment_mask, value_column] / 1e3 / model_years
     )
 
-    out[value_name] = pd.to_numeric(out[value_name], errors="coerce").fillna(0.0)
-
-    if value_name == "PercentReduction":
-        out["Units"] = "%"
-        return out
-
-    if reporting_units == "report_card":
-        mask_fs = out["Constituent"].isin(["FS", "CS"])
-        out.loc[mask_fs, value_name] = out.loc[mask_fs, value_name] / 1e6 / model_years
-        out.loc[~mask_fs, value_name] = out.loc[~mask_fs, value_name] / 1e3 / model_years
-        out["Units"] = out["Constituent"].apply(_report_unit_for_constituent)
-    else:
-        out["Units"] = "kg"
+    out["Units"] = out["Constituent"].apply(_report_unit_for_constituent)
 
     return out
 
@@ -124,36 +85,6 @@ def _stack_basin_summaries(
     scenario: str,
     value_column: str,
 ) -> pd.DataFrame:
-    """
-    Convert nested grouped summary dict into one long dataframe.
-
-    Expected structure
-    ------------------
-    basin_summaries_by_region[region][group_name] = DataFrame
-
-    Each grouped dataframe is expected to be FU x constituent wide format, e.g.:
-
-                    FS          PN        ...
-    FU
-    Bananas         ...
-    Grazing         ...
-
-    Returns
-    -------
-    pd.DataFrame
-        Long-format dataframe with columns:
-            Scenario
-            Region
-            Basin
-            FU
-            Constituent
-            <value_column>
-
-    Notes
-    -----
-    The column name 'Basin' is retained for backward compatibility, even though
-    the actual aggregation scale may be Basin_35, Manag_Unit_48, or WQI.
-    """
     rows: list[pd.DataFrame] = []
 
     for region, basin_dict in basin_summaries_by_region.items():
@@ -184,7 +115,8 @@ def _stack_basin_summaries(
             )
 
             df_long[value_column] = pd.to_numeric(
-                df_long[value_column], errors="coerce"
+                df_long[value_column],
+                errors="coerce",
             ).fillna(0.0)
 
             rows.append(df_long)
@@ -213,38 +145,6 @@ def build_basin_export_summaries(
     value_column: str = "LoadToRegExport (kg)",
     reporting_units: str = "raw",
 ) -> pd.DataFrame:
-    """
-    Build aggregation-scale FU summaries across all scenarios.
-
-    Parameters
-    ----------
-    cfg : GBRConfig
-        Central configuration object.
-    basin_scale : str, default "48"
-        Aggregation scale. Supported values depend on resolve_basin_column()
-        and should include Basin_35, Manag_Unit_48, and WQI.
-    region : str, optional
-        Single region to process.
-    regions : list[str], optional
-        Multiple regions to process.
-    constituents : list[str], optional
-        Constituents to include.
-    value_column : str, default "LoadToRegExport (kg)"
-        Output value column name.
-    reporting_units : str, default "raw"
-        Either "raw" or "report_card".
-
-    Returns
-    -------
-    pd.DataFrame
-        Long-format grouped FU summaries across all scenarios.
-
-    Notes
-    -----
-    The output column names 'Basin' and 'BasinScale' are retained for backward
-    compatibility. 'Basin' should be interpreted as the selected aggregation
-    unit, which may be Basin_35, Manag_Unit_48, or WQI.
-    """
     resolved_scale = resolve_basin_column(basin_scale)
 
     all_models: list[pd.DataFrame] = []
@@ -266,6 +166,7 @@ def build_basin_export_summaries(
             scenario=model,
             value_column=value_column,
         )
+
         all_models.append(df_model)
 
     if not all_models:
@@ -286,9 +187,7 @@ def build_basin_export_summaries(
             value_column=value_column,
         )
     else:
-        raise ValueError(
-            "Invalid reporting_units. Use 'raw' or 'report_card'."
-        )
+        raise ValueError("Invalid reporting_units. Use 'raw' or 'report_card'.")
 
     return basin_df
 
@@ -302,27 +201,6 @@ def build_basin_scenario_comparison(
     value_column: str = "LoadToRegExport (kg)",
     reporting_units: str = "raw",
 ) -> dict[str, pd.DataFrame]:
-    """
-    Build aggregation-scale scenario comparison tables.
-
-    Returns
-    -------
-    dict[str, pd.DataFrame]
-        Keys:
-            basin_loads
-            compare_ready
-            base_wide
-            predev_wide
-            change_wide
-            anthropogenic
-            reduction
-            percent_reduction
-
-    Notes
-    -----
-    The output still uses the column names 'Basin' and 'BasinScale' for
-    compatibility with existing scripts.
-    """
     basin_df = build_basin_export_summaries(
         cfg=cfg,
         basin_scale=basin_scale,
@@ -340,11 +218,12 @@ def build_basin_scenario_comparison(
         "Constituent",
         "BasinScale",
     ]
+
     if "Units" in basin_df.columns:
         group_cols.append("Units")
 
     compare_ready = (
-        basin_df.groupby(group_cols, as_index=False)[value_column]
+        basin_df.groupby(group_cols, dropna=False, as_index=False)[value_column]
         .sum()
     )
 
@@ -354,6 +233,7 @@ def build_basin_scenario_comparison(
         drop_cols = ["Scenario"]
         if "Units" in out.columns:
             drop_cols.append("Units")
+
         out = out.drop(columns=drop_cols)
 
         out = out.pivot_table(
@@ -365,6 +245,7 @@ def build_basin_scenario_comparison(
         )
 
         out = out.sort_index(axis=0).sort_index(axis=1)
+
         return out
 
     base_wide = _scenario_wide(compare_ready, "BASE")
@@ -411,31 +292,8 @@ def build_basin_scenario_comparison(
 
 
 def flatten_basin_tables(
-    basin_tables_by_region: dict[str, dict[str, pd.DataFrame]]
+    basin_tables_by_region: dict[str, dict[str, pd.DataFrame]],
 ) -> pd.DataFrame:
-    """
-    Flatten nested grouped tables into one long dataframe.
-
-    Parameters
-    ----------
-    basin_tables_by_region : dict[str, dict[str, pd.DataFrame]]
-        Nested structure:
-            basin_tables_by_region[Region][GroupName] = DataFrame
-
-    Returns
-    -------
-    pd.DataFrame
-        Columns:
-        - Region
-        - Basin
-        - FU
-        - constituent columns...
-
-    Notes
-    -----
-    The output column name 'Basin' is retained for backward compatibility,
-    even though the grouping may represent Basin_35, Manag_Unit_48, or WQI.
-    """
     frames = []
 
     for reg, basin_dict in basin_tables_by_region.items():
@@ -450,3 +308,203 @@ def flatten_basin_tables(
         return pd.DataFrame()
 
     return pd.concat(frames, ignore_index=True)
+
+
+def _find_core_basin_summary_csv(
+    *,
+    bundle_dirs: dict[str, Path] | None,
+) -> Path | None:
+    """
+    Find the already-generated core basin summary CSV from the report-card step.
+    """
+    if not bundle_dirs:
+        return None
+
+    core_dir = bundle_dirs.get("report_card_summary")
+    if core_dir is None:
+        return None
+
+    core_dir = Path(core_dir)
+
+    candidates = [
+        core_dir / "report_card_summary_basin_report_units.csv",
+        core_dir / "report_card_summary_basin_raw.csv",
+        core_dir / "report_card_summary_basin_kg.csv",
+    ]
+
+    for path in candidates:
+        if path.exists():
+            return path
+
+    matches = sorted(core_dir.glob("report_card_summary_basin_*.csv"))
+    if matches:
+        return matches[0]
+
+    return None
+
+
+def _build_basin_component_from_core_summary(
+    basin_summary: pd.DataFrame,
+) -> dict[str, pd.DataFrame]:
+    """
+    Build standalone basin component outputs from the already-flattened
+    core report-card basin summary.
+
+    Expected core summary columns include:
+    - Source
+    - MetricType
+    - Scenario
+    - Level
+    - Region
+    - Basin
+    - FU
+    - Constituent
+    - Process
+    - Units
+    - Value
+    """
+    required = ["Scenario", "Level", "Region", "Basin", "Constituent", "Units", "Value"]
+    missing = [c for c in required if c not in basin_summary.columns]
+    if missing:
+        raise KeyError(f"Core basin summary missing required columns: {missing}")
+
+    basin_all = basin_summary.loc[basin_summary["Level"] == "Basin"].copy()
+
+    basin_fu = basin_all.loc[basin_all["Source"] == "FU"].copy()
+    basin_process = basin_all.loc[basin_all["Source"] == "PROCESS"].copy()
+
+    basin_totals = (
+        basin_all.groupby(
+            ["Source", "MetricType", "Scenario", "Region", "Basin", "Constituent", "Units"],
+            dropna=False,
+            as_index=False,
+        )["Value"]
+        .sum()
+    )
+
+    fu_totals = (
+        basin_fu.groupby(
+            ["Scenario", "Region", "Basin", "Constituent", "Units"],
+            dropna=False,
+            as_index=False,
+        )["Value"]
+        .sum()
+    )
+
+    return {
+        "basin_summary": basin_all,
+        "basin_fu": basin_fu,
+        "basin_process": basin_process,
+        "basin_totals": basin_totals,
+        "fu_totals": fu_totals,
+    }
+
+
+def run_basin_summary(
+    cfg: GBRConfig,
+    output_dir: str | Path,
+    constituents: list[str] | None = None,
+    value_column: str = "LoadToRegExport (kg)",
+    units: str = "report",
+    process_model: str = "BASE",
+    basin_scale: str = "48",
+    regions: list[str] | None = None,
+    bundle_dirs: dict[str, Path] | None = None,
+) -> dict[str, object]:
+    """
+    Export standalone basin component outputs.
+
+    In bundle mode, this reuses the existing core basin summary CSV to avoid
+    re-reading and re-merging large source output files.
+
+    If no core basin summary CSV is found, it falls back to rebuilding basin
+    scenario comparison outputs from source files.
+    """
+    out_dir = ensure_output_dir(output_dir)
+    files: dict[str, Path] = {}
+
+    core_basin_csv = _find_core_basin_summary_csv(bundle_dirs=bundle_dirs)
+
+    if core_basin_csv is not None:
+        basin_summary = pd.read_csv(core_basin_csv)
+        result = _build_basin_component_from_core_summary(basin_summary)
+
+        basin_summary_csv = out_dir / "basin_summary.csv"
+        basin_fu_csv = out_dir / "basin_fu_summary.csv"
+        basin_process_csv = out_dir / "basin_process_summary.csv"
+        basin_totals_csv = out_dir / "basin_totals.csv"
+        fu_totals_csv = out_dir / "basin_fu_totals.csv"
+
+        result["basin_summary"].to_csv(basin_summary_csv, index=False)
+        result["basin_fu"].to_csv(basin_fu_csv, index=False)
+        result["basin_process"].to_csv(basin_process_csv, index=False)
+        result["basin_totals"].to_csv(basin_totals_csv, index=False)
+        result["fu_totals"].to_csv(fu_totals_csv, index=False)
+
+        files["basin_output_csv"] = basin_summary_csv
+        files["basin_fu_summary_csv"] = basin_fu_csv
+        files["basin_process_summary_csv"] = basin_process_csv
+        files["basin_totals_csv"] = basin_totals_csv
+        files["basin_fu_totals_csv"] = fu_totals_csv
+
+        workbook_path = out_dir / "basin_summary.xlsx"
+        export_tables_to_excel(
+            tables={
+                "basin_summary": result["basin_summary"],
+                "basin_fu": result["basin_fu"],
+                "basin_process": result["basin_process"],
+                "basin_totals": result["basin_totals"],
+                "fu_totals": result["fu_totals"],
+            },
+            output_path=workbook_path,
+            index=False,
+        )
+        files["basin_summary_workbook"] = workbook_path
+
+        result["files"] = files
+        result["source_file"] = core_basin_csv
+        result["mode"] = "from_core_report_card_summary"
+
+        return result
+
+    reporting_units = "report_card" if units == "report" else "raw"
+
+    rebuilt = build_basin_scenario_comparison(
+        cfg=cfg,
+        basin_scale=basin_scale,
+        regions=regions if regions is not None else getattr(cfg, "regions", None),
+        constituents=constituents,
+        value_column=value_column,
+        reporting_units=reporting_units,
+    )
+
+    basin_loads_csv = out_dir / "basin_fu_loads.csv"
+    compare_ready_csv = out_dir / "basin_totals_compare_ready.csv"
+
+    rebuilt["basin_loads"].to_csv(basin_loads_csv, index=False)
+    rebuilt["compare_ready"].to_csv(compare_ready_csv, index=False)
+
+    files["basin_output_csv"] = basin_loads_csv
+    files["basin_compare_ready_csv"] = compare_ready_csv
+
+    workbook_path = out_dir / "basin_summary.xlsx"
+    export_tables_to_excel(
+        tables={
+            "basin_fu_loads": rebuilt["basin_loads"],
+            "compare_ready": rebuilt["compare_ready"],
+            "base_wide": rebuilt["base_wide"].reset_index(),
+            "predev_wide": rebuilt["predev_wide"].reset_index(),
+            "change_wide": rebuilt["change_wide"].reset_index(),
+            "anthropogenic": rebuilt["anthropogenic"].reset_index(),
+            "reduction": rebuilt["reduction"].reset_index(),
+            "percent_reduction": rebuilt["percent_reduction"].reset_index(),
+        },
+        output_path=workbook_path,
+        index=False,
+    )
+    files["basin_summary_workbook"] = workbook_path
+
+    rebuilt["files"] = files
+    rebuilt["mode"] = "rebuilt_from_source_outputs"
+
+    return rebuilt

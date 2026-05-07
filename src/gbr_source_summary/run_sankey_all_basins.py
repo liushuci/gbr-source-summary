@@ -6,7 +6,7 @@ import re
 import matplotlib.pyplot as plt
 from matplotlib.sankey import Sankey
 import pandas as pd
-
+import os
 from gbr_source_summary.naming import standardise_constituent_names
 
 # =========================================================
@@ -25,7 +25,12 @@ CONSTITUENTS = None
 # CONSTITUENTS = ["FS", "PN", "PP", "DIN"]
 
 SOURCE_SINK_DIR = BASE_PATH / "report_card_summary" / "source_sink"
-OUTPUT_ROOT = SOURCE_SINK_DIR / "sankey_diagrams"
+OUTPUT_ROOT = Path(
+    os.environ.get(
+        "GBR_SANKEY_OUTPUT_ROOT",
+        str(SOURCE_SINK_DIR / "sankey_diagrams"),
+    )
+)
 
 SUPPORTED_CONSTITUENTS = ["FS", "CS", "PN", "PP", "DIN", "DON", "DIP", "DOP"]
 
@@ -51,8 +56,12 @@ def source_sink_csv_path() -> Path:
     raise ValueError("BASIN_SCALE must be 'MU48' or 'BASIN35'")
 
 
-def output_dir_for_region(region: str) -> Path:
-    out = OUTPUT_ROOT / region / BASIN_SCALE
+def output_dir_for_region(
+    region: str,
+    constituent: str,
+    output_root: Path,
+) -> Path:
+    out = output_root / region / BASIN_SCALE / constituent
     out.mkdir(parents=True, exist_ok=True)
     return out
 
@@ -416,7 +425,9 @@ def make_plot(
     names = summary.index.tolist()
     labels, orientations = build_labels_and_orientations(names)
     units = constituent_unit_label(constituent)
-    output_dir = output_dir_for_region(region)
+    output_dir = output_dir_for_region(region,
+                                       constituent,
+                                       OUTPUT_ROOT)
 
     fig_w, fig_h = figure_size_for_summary(summary)
     title_fs, label_fs, total_fs = font_sizes_for_summary(summary)
@@ -538,7 +549,11 @@ def main() -> None:
         print("\n" + "=" * 60)
         print(f"Region      : {region}")
         print(f"Basins found: {len(basin_list)}")
-        print(f"Output dir  : {output_dir_for_region(region)}")
+        for constituent in constituents:
+            print(
+                f"Output dir ({constituent}) : "
+                f"{output_dir_for_region(region, constituent, OUTPUT_ROOT)}"
+            )
 
         for basin_name in basin_list:
             for constituent in constituents:

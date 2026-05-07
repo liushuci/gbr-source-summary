@@ -44,11 +44,21 @@ GBR_NAME_MAP = {
 }
 
 
-def standardise_constituent_names(values) -> pd.Series:
+def standardise_constituent_names(values):
     """
-    Apply standard constituent name mapping to a sequence of values.
+    Fast constituent-name standardisation.
+
+    pandas.Series.replace(dict) is extremely slow on very large
+    string arrays because it repeatedly scans arrays internally.
+
+    map() + fillna() is dramatically faster.
     """
-    return pd.Series(values).replace(CONSTITUENT_MAP)
+
+    s = pd.Series(values, copy=False)
+
+    mapped = s.map(CONSTITUENT_MAP)
+
+    return mapped.fillna(s)
 
 
 def standardise_management_unit_names(values) -> pd.Series:
@@ -63,11 +73,20 @@ def apply_constituent_name_standardisation(
     column: str = "Constituent",
 ) -> pd.DataFrame:
     """
-    Return a copy of a dataframe with standardised constituent names.
+    Fast in-place constituent standardisation.
     """
+
+    if column not in df.columns:
+        return df
+
     out = df.copy()
-    if column in out.columns:
-        out[column] = standardise_constituent_names(out[column])
+
+    s = out[column].astype("string")
+
+    mapped = s.map(CONSTITUENT_MAP)
+
+    out[column] = mapped.fillna(s)
+
     return out
 
 

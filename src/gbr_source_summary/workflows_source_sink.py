@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Iterable
 
 import pandas as pd
-
+import os
 from .naming import (
     standardise_constituent_names,
     standardise_management_unit_names,
@@ -899,23 +899,70 @@ def join_raw_results_to_basin_lookup(
     raw_results: pd.DataFrame,
     lookup_table: pd.DataFrame,
     raw_model_element_col: str = "ModelElement",
-    lookup_model_element_col: str = "ModelElement",
+    lookup_model_element_col: str | None = None,
 ) -> pd.DataFrame:
     """
     Join raw results to the basin lookup table.
+
+    Auto-detects lookup key if ModelElement is not present.
+    Common LUT keys include:
+    - ModelElement
+    - Reg_SC
+    - SUBCAT
+    - Subcatchment
     """
     if raw_model_element_col not in raw_results.columns:
-        raise KeyError(f"Missing raw model element column: {raw_model_element_col}")
-    if lookup_model_element_col not in lookup_table.columns:
-        raise KeyError(f"Missing lookup model element column: {lookup_model_element_col}")
+        raise KeyError(
+            f"Missing raw model element column: {raw_model_element_col}. "
+            f"Raw columns: {list(raw_results.columns)}"
+        )
+
+    lut = lookup_table.copy()
+
+    if lookup_model_element_col is None:
+        candidates = [
+            "ModelElement",
+            "Reg_SC",
+            "SUBCAT",
+            "Subcat",
+            "Subcatchment",
+            "Model_Element",
+        ]
+
+        for c in candidates:
+            if c in lut.columns:
+                lookup_model_element_col = c
+                break
+
+    if lookup_model_element_col is None or lookup_model_element_col not in lut.columns:
+        raise KeyError(
+            "Could not find lookup model element column. "
+            f"LUT columns: {list(lut.columns)}"
+        )
+
+    raw = raw_results.copy()
+
+    raw["_join_model_element"] = (
+        raw[raw_model_element_col]
+        .astype(str)
+        .str.strip()
+    )
+
+    lut["_join_model_element"] = (
+        lut[lookup_model_element_col]
+        .astype(str)
+        .str.strip()
+    )
 
     out = pd.merge(
-        raw_results,
-        lookup_table,
-        left_on=raw_model_element_col,
-        right_on=lookup_model_element_col,
+        raw,
+        lut,
+        on="_join_model_element",
         how="left",
+        suffixes=("", "_lut"),
     )
+
+    out = out.drop(columns=["_join_model_element"])
 
     return out
 
@@ -971,3 +1018,427 @@ def build_basin_source_sink_for_region_scenarios(
         )
 
     return pd.concat(rows, ignore_index=True)
+
+# =============================================================================
+# Wrapper-ready runners
+# =============================================================================
+
+from functools import lru_cache
+
+from .config import GBRConfig
+from .export import ensure_output_dir
+from .export_excel import export_tables_to_excel
+
+
+@lru_cache(maxsize=None)
+def _read_csv_cached(path_str: str) -> pd.DataFrame:
+    """
+    Cached CSV reader used by the wrapper-level source-sink workflow.
+
+    on_bad_lines='skip' is intentional here so a malformed row in large Source
+    output tables does not stop the whole report-card bundle.
+    """
+    return pd.read_csv(
+        path_str,
+        low_memory=False,
+        on_bad_lines="skip",
+    )
+
+
+def _read_csv(path: str | Path) -> pd.DataFrame:
+    return _read_csv_cached(str(path))
+
+
+def _cfg_rc_label(cfg: GBRConfig) -> str:
+    """
+    Return the RC/build label used in model output folder names.
+    Common examples: Gold_93_23.
+    """
+    for attr in ["rc", "RC", "run_name", "scenario_label"]:
+        value = getattr(cfg, attr, None)
+        if value:
+            return str(value)
+    return "Gold_93_23"
+
+
+def _cfg_main_path(cfg: GBRConfig) -> Path:
+    main_path = getattr(cfg, "main_path", None)
+    if main_path is None:
+        raise AttributeError("cfg.main_path is required for source-sink summary.")
+    return Path(main_path)
+
+
+def _find_raw_results_path(
+    cfg: GBRConfig,
+    region: str,
+    scenario: str = "BASE",
+) -> Path:
+    """
+    Locate RawResults.csv for one region/scenario.
+    """
+    scenario = str(scenario).upper()
+    rc_label = _cfg_rc_label(cfg)
+    main_path = _cfg_main_path(cfg)
+
+    candidates = [
+        main_path
+        / "Gold_ResultsSets_PointOfTruth"
+        / region
+        / "Model_Outputs"
+        / f"{scenario}_{rc_label}"
+        / "RawResults.csv",
+        main_path
+        / region
+        / "Model_Outputs"
+        / f"{scenario}_{rc_label}"
+        / "RawResults.csv",
+        main_path
+        / "Model_Outputs"
+        / region
+        / f"{scenario}_{rc_label}"
+        / "RawResults.csv",
+    ]
+
+    for p in candidates:
+        if p.exists():
+            return p
+
+    raise FileNotFoundError(
+        "Could not find RawResults.csv. Tried:\n"
+        + "\n".join(str(p) for p in candidates)
+    )
+
+
+def _find_lookup_path(
+    cfg: GBRConfig,
+    region: str,
+) -> Path:
+    """
+    Locate region subcatchment-to-basin lookup table.
+    """
+    main_path = _cfg_main_path(cfg)
+
+    candidates = [
+        main_path / "regionalisations" / f"{region}_Subcat_Regions_LUT.csv",
+        main_path / "Regionalisations" / f"{region}_Subcat_Regions_LUT.csv",
+        main_path / region / f"{region}_Subcat_Regions_LUT.csv",
+        main_path / f"{region}_Subcat_Regions_LUT.csv",
+    ]
+
+    for p in candidates:
+        if p.exists():
+            return p
+
+    # Last-resort recursive search. Kept after explicit candidates so it is not
+    # expensive during normal runs.
+    matches = list(main_path.rglob(f"{region}_Subcat_Regions_LUT.csv"))
+    if matches:
+        return matches[0]
+
+    raise FileNotFoundError(
+        "Could not find region lookup CSV. Tried:\n"
+        + "\n".join(str(p) for p in candidates)
+    )
+
+
+def _empty_source_sink_outputs() -> dict[str, pd.DataFrame]:
+    basin_cols = [
+        "Region",
+        "Scenario",
+        "Basin",
+        "Constituent",
+        "BudgetGroup",
+        DEFAULT_VALUE_COLUMN,
+        "Units",
+        "DisplayValue",
+    ]
+    region_cols = [
+        "Region",
+        "Scenario",
+        "Constituent",
+        "BudgetGroup",
+        "Units",
+        DEFAULT_VALUE_COLUMN,
+    ]
+    gbr_cols = [
+        "Scenario",
+        "Constituent",
+        "BudgetGroup",
+        "Units",
+        DEFAULT_VALUE_COLUMN,
+    ]
+    return {
+        "basin_summary": pd.DataFrame(columns=basin_cols),
+        "region_summary": pd.DataFrame(columns=region_cols),
+        "gbr_summary": pd.DataFrame(columns=gbr_cols),
+    }
+
+
+def _normalise_selected_constituents(
+    constituents: list[str] | None,
+) -> list[str] | None:
+    if constituents is None:
+        return None
+    return list(standardise_constituent_names(pd.Series(constituents)).dropna().astype(str))
+
+
+def run_source_sink_summary(
+    cfg: GBRConfig,
+    output_dir: str | Path,
+    regions: list[str] | None = None,
+    constituents: list[str] | None = None,
+    scenario: str | None = None,
+    model: str | None = None,
+    process_model: str | None = None,
+    units: str = "report",
+    basin_column: str = "Manag_Unit_48",
+    export_excel_workbook: bool = True,
+    **kwargs,
+) -> dict[str, object]:
+    """
+    Build source-sink summaries for the report-card bundle wrapper.
+
+    This runner intentionally uses RawResults.csv + the region LUT directly.
+    It does not require RegContributorDataGrid.
+
+    Outputs
+    -------
+    - source_sink_basin_summary.csv
+    - source_sink_region_summary.csv
+    - source_sink_gbr_summary.csv
+    - source_sink_summary.xlsx, unless disabled
+    """
+    out_dir = ensure_output_dir(output_dir)
+
+    selected_regions = regions if regions is not None else getattr(cfg, "regions", [])
+    selected_regions = list(selected_regions or [])
+    selected_constituents = _normalise_selected_constituents(constituents)
+
+    selected_scenario = scenario or model or process_model or "BASE"
+    selected_scenario = str(selected_scenario).upper()
+
+    basin_tables: list[pd.DataFrame] = []
+    region_tables: list[pd.DataFrame] = []
+
+    for region in selected_regions:
+        #print(f"\nLoading source-sink inputs: {region}")
+
+        raw_path = _find_raw_results_path(
+            cfg=cfg,
+            region=region,
+            scenario=selected_scenario,
+        )
+        lut_path = _find_lookup_path(
+            cfg=cfg,
+            region=region,
+        )
+
+        raw = _read_csv(raw_path)
+        lut = _read_csv(lut_path)
+
+        if "Constituent" in raw.columns:
+            raw = raw.copy()
+            raw["Constituent"] = standardise_constituent_names(raw["Constituent"])
+            if selected_constituents is not None:
+                raw = raw.loc[raw["Constituent"].isin(selected_constituents)].copy()
+
+        joined = join_raw_results_to_basin_lookup(
+            raw_results=raw,
+            lookup_table=lut,
+        )
+
+        basin_summary = build_basin_source_sink_summary_from_raw(
+            raw_results=joined,
+            region=region,
+            scenario=selected_scenario,
+            basin_column=basin_column,
+            constituent_column="Constituent",
+            budget_element_column="BudgetElement",
+            value_column=DEFAULT_VALUE_COLUMN,
+        )
+
+        if basin_summary.empty:
+            continue
+
+        if units == "report":
+            basin_summary = convert_source_sink_to_annual_units(
+                basin_summary,
+                model_years=getattr(cfg, "model_years", 30),
+                value_column=DEFAULT_VALUE_COLUMN,
+            )
+        else:
+            basin_summary["Units"] = "kg"
+
+        basin_summary = add_display_value(
+            basin_summary,
+            value_column=DEFAULT_VALUE_COLUMN,
+        )
+
+        region_summary = build_region_source_sink_summary(
+            basin_summary,
+            scenario=selected_scenario,
+            value_column=DEFAULT_VALUE_COLUMN,
+        )
+
+        basin_tables.append(basin_summary)
+        region_tables.append(region_summary)
+
+    if basin_tables:
+        basin_all = pd.concat(basin_tables, ignore_index=True)
+    else:
+        basin_all = _empty_source_sink_outputs()["basin_summary"]
+
+    if region_tables:
+        region_all = pd.concat(region_tables, ignore_index=True)
+    else:
+        region_all = _empty_source_sink_outputs()["region_summary"]
+
+    if not region_all.empty:
+        gbr_all = build_gbr_source_sink_summary(
+            region_all,
+            value_column=DEFAULT_VALUE_COLUMN,
+        )
+    else:
+        gbr_all = _empty_source_sink_outputs()["gbr_summary"]
+
+    basin_csv = out_dir / "source_sink_basin_summary.csv"
+    region_csv = out_dir / "source_sink_region_summary.csv"
+    gbr_csv = out_dir / "source_sink_gbr_summary.csv"
+
+    basin_all.to_csv(basin_csv, index=False)
+    region_all.to_csv(region_csv, index=False)
+    gbr_all.to_csv(gbr_csv, index=False)
+
+    files: dict[str, Path] = {
+        "source_sink_summary_csv": basin_csv,
+        "region_output_csv": region_csv,
+        "gbr_summary_csv": gbr_csv,
+    }
+
+    if export_excel_workbook:
+        workbook = out_dir / "source_sink_summary.xlsx"
+        export_tables_to_excel(
+            tables={
+                "basin": basin_all,
+                "region": region_all,
+                "gbr": gbr_all,
+            },
+            output_path=workbook,
+            index=False,
+        )
+        files["source_sink_workbook"] = workbook
+
+    return {
+        "basin_summary": basin_all,
+        "region_summary": region_all,
+        "gbr_summary": gbr_all,
+        "files": files,
+    }
+
+
+def build_source_sink_summary(*args, **kwargs) -> dict[str, object]:
+    """
+    Alias used by the reflective report-card wrapper.
+    """
+    return run_source_sink_summary(*args, **kwargs)
+
+
+def export_source_sink_summary(*args, **kwargs) -> dict[str, object]:
+    """
+    Alias used by the reflective report-card wrapper.
+    """
+    return run_source_sink_summary(*args, **kwargs)
+
+
+def run_source_sink_sankey_all_basins(*args, **kwargs):
+    """
+    Placeholder for the bundle Sankey step.
+
+    Sankey plotting should remain in the dedicated Sankey script/workflow.
+    Keeping this as NotImplementedError lets run_report_card_bundle mark the
+    step as SKIPPED unless --fail-fast is used.
+    """
+    raise NotImplementedError(
+        "Sankey export is not wired into workflows_source_sink.py yet. "
+        "Run scripts/run_source_sink_sankey_for_basin.py or the dedicated all-basins Sankey script."
+    )
+
+
+def run_source_sink_sankey_for_all_basins(*args, **kwargs):
+    """
+    Alias used by the reflective report-card wrapper.
+    """
+    return run_source_sink_sankey_all_basins(*args, **kwargs)
+
+
+def export_source_sink_sankey_all_basins(*args, **kwargs):
+    """
+    Alias used by the reflective report-card wrapper.
+    """
+    return run_source_sink_sankey_all_basins(*args, **kwargs)
+
+
+
+def run_source_sink_sankey_all_basins(
+    cfg,
+    output_dir,
+    scenario: str = "BASE",
+    basin_scale: str = "MU48",
+    constituents: list[str] | None = None,
+    regions: list[str] | None = None,
+    **kwargs,
+):
+    """
+    Wrapper-compatible Sankey runner for report-card bundle.
+    """
+
+    from pathlib import Path
+    import subprocess
+    import sys
+
+    script_path = Path(__file__).resolve().parent / "run_sankey_all_basins.py"
+
+    if not script_path.exists():
+        raise FileNotFoundError(
+            f"Sankey script not found: {script_path}"
+        )
+
+    cmd = [
+        sys.executable,
+        str(script_path),
+    ]
+
+    print("\nRunning Sankey generation")
+    print(" ".join(cmd))
+
+    env = dict(os.environ)
+    env["GBR_SANKEY_OUTPUT_ROOT"] = str(output_dir)
+    result = subprocess.run(
+        cmd,
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+    print(result.stdout)
+
+    if result.returncode != 0:
+        print(result.stderr)
+        raise RuntimeError(
+            f"Sankey generation failed with exit code {result.returncode}"
+        )
+
+    return {
+        "files": {
+            "sankey_plot": str(output_dir)
+        }
+    }
+
+
+def run_source_sink_sankey_for_all_basins(*args, **kwargs):
+    return run_source_sink_sankey_all_basins(*args, **kwargs)
+
+
+def export_source_sink_sankey_all_basins(*args, **kwargs):
+    return run_source_sink_sankey_all_basins(*args, **kwargs)

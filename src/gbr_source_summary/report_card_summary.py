@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Any
+import inspect
 import traceback
 
 import pandas as pd
@@ -100,17 +101,49 @@ FILE_DESCRIPTIONS = {
     "basin_summary_csv": "Basin-level flattened report-card summary combining FU and process outputs.",
     "summary_csv": "Combined flattened summary across GBR, region, and basin levels.",
     "summary_workbook": "Excel workbook containing metadata, QA, and all core summary tables.",
+    "basin_fu_summary_csv": "Basin-level FU rows extracted from the core report-card basin summary.",
+    "basin_process_summary_csv": "Basin-level process rows extracted from the core report-card basin summary.",
+    "basin_totals_csv": "Basin-level totals grouped by source, metric type, scenario, basin, constituent and units.",
     "bundle_metadata_csv": "Top-level metadata for the bundle run.",
     "bundle_step_summary_csv": "Step-by-step output index with one output file per row.",
     "bundle_readme_txt": "Human-readable overview of the bundle structure and outputs.",
     "region_output_csv": "Region summary outputs from an external workflow.",
     "basin_output_csv": "Basin summary outputs from an external workflow.",
+    "basin_compare_ready_csv": "Basin-level scenario totals ready for comparison calculations.",
+    "basin_summary_workbook": "Excel workbook containing basin scenario comparison tables.",
     "landuse_rainfall_csv": "Land use and rainfall summary outputs.",
     "source_sink_summary_csv": "Source-sink summary outputs.",
+    "source_sink_workbook": "Excel workbook containing source-sink basin, region and GBR summary tables.",
+    "source_sink_basin_csv": "Source-sink summary at Management Unit 48 / basin scale.",
+    "source_sink_region_csv": "Source-sink summary aggregated to region scale.",
+    "source_sink_gbr_csv": "Source-sink summary aggregated to whole GBR scale.",
     "sankey_plot": "Sankey diagram output.",
     "region_basin_totals_csv": "Basin totals used to roll up region scenario comparison outputs.",
     "region_basin_fu_loads_csv": "Underlying basin FU scenario loads used for region aggregation.",
     "region_summary_workbook": "Excel workbook containing region totals and scenario comparison tables.",
+    "landuse_stream_summary_csv": "Legacy report-card style regional land-use area and stream length summary.",
+    "landuse_fu_area_all_csv": "Detailed ModelElement x FU area table across all regions.",
+    "landuse_subcat_fu_area_csv": "Subcatchment x FU land-use area summary.",
+    "landuse_basin35_fu_area_csv": "Basin_35 x FU land-use area summary.",
+    "landuse_mu48_fu_area_csv": "Management Unit 48 x FU land-use area summary.",
+    "landuse_region_fu_area_csv": "Region x FU land-use area summary.",
+    "landuse_basin35_area_wide_csv": "Wide Basin_35 land-use area table with one FU per column.",
+    "landuse_basin35_pct_wide_csv": "Wide Basin_35 land-use percentage table with one FU per column.",
+    "landuse_mu48_area_wide_csv": "Wide Management Unit 48 land-use area table with one FU per column.",
+    "landuse_mu48_pct_wide_csv": "Wide Management Unit 48 land-use percentage table with one FU per column.",
+    "rainfall_all_csv": "Detailed rainfall x area table across all regions.",
+    "rainfall_subcat_csv": "Area-weighted rainfall summary by subcatchment.",
+    "rainfall_basin35_csv": "Area-weighted rainfall summary by Basin_35.",
+    "rainfall_mu48_csv": "Area-weighted rainfall summary by Management Unit 48.",
+    "rainfall_region_csv": "Area-weighted rainfall summary by region.",
+    "rainfall_gbr_csv": "Area-weighted rainfall summary for the whole GBR.",
+    "landuse_rainfall_basin35_csv": "Combined Basin_35 rainfall and land-use area table.",
+    "landuse_rainfall_mu48_csv": "Combined Management Unit 48 rainfall and land-use area table.",
+    "landuse_rainfall_qa_csv": "QA summary for land-use and rainfall processing.",
+    "landuse_rainfall_qa_key_check_csv": "Key check between climateTable and fuAreasTable.",
+    "landuse_rainfall_qa_unmatched_lut_csv": "Rows that could not be matched to the region LUT.",
+    "landuse_rainfall_qa_inconsistent_rain_csv": "Model elements with inconsistent rainfall across FUs.",
+    "landuse_rainfall_workbook": "Excel workbook containing land-use and rainfall summary tables.",
 }
 
 
@@ -826,6 +859,34 @@ def _write_bundle_readme(
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
+
+
+def _call_step_with_supported_kwargs(step_fn: Callable[..., Any], **kwargs: Any) -> Any:
+    """
+    Call an extra workflow step with only the keyword arguments it supports.
+
+    This makes the bundle runner tolerant of different workflow function
+    signatures. For example, source-sink workflows may accept either
+    process_model, model, or scenario.
+    """
+    sig = inspect.signature(step_fn)
+
+    # If the callable accepts **kwargs, pass everything through.
+    if any(
+        p.kind == inspect.Parameter.VAR_KEYWORD
+        for p in sig.parameters.values()
+    ):
+        return step_fn(**kwargs)
+
+    accepted = {
+        name: value
+        for name, value in kwargs.items()
+        if name in sig.parameters
+    }
+
+    return step_fn(**accepted)
+
+
 def run_report_card_summary(
     cfg: GBRConfig,
     output_dir: str | Path,
@@ -1096,13 +1157,19 @@ def run_report_card_bundle(
         step_dir = bundle_dirs.get(step_name, ensure_output_dir(bundle_dirs["other"] / step_name))
 
         try:
-            result = step_fn(
+            result = _call_step_with_supported_kwargs(
+                step_fn,
                 cfg=cfg,
                 output_dir=step_dir,
+                output_root=step_dir,
+                out_dir=step_dir,
                 constituents=constituents,
                 value_column=value_column,
                 units=units,
                 process_model=process_model,
+                model=process_model,
+                scenario=process_model,
+                regions=getattr(cfg, "regions", None),
                 bundle_dirs=bundle_dirs,
             )
 

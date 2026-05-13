@@ -1,26 +1,13 @@
 """
 Report-card summary and bundle wrapper for gbr_source_summary.
 
-This module provides two layers:
-
-1. Core report-card summary
-   - FU scenario comparison outputs
-   - process summary outputs
-   - flattened long-format tables for GBR / Region / Basin
-   - CSV + Excel + QA outputs
-
-2. Bundle wrapper
-   - creates a clean output folder structure
-   - runs the core summary first
-   - optionally runs extra workflow steps one by one
-   - records step status and output files
-   - writes a bundle README.txt
-
 Notes
 -----
-- FU wide tables and process single-constituent tables cannot use
-  apply_units(units="report") directly, because they do not contain a
-  'Constituent' column. Those are converted manually here.
+- Fine sediment is FS. Do not use TSS.
+- Process contribution plots are written to:
+    08_process_contribution_plots
+- Change summary plots are written to:
+    09_change_summary_plots
 """
 
 from __future__ import annotations
@@ -42,6 +29,9 @@ from .workflows_compare import (
     build_fu_scenario_comparison,
 )
 from .workflows_process import build_process_export_summaries
+from .plot_process_contribution import plot_process_contribution_exports
+from .fu_load_summary import run_fu_load_summary
+from .report_subcatchment_summary import run_subcatchment_summary
 
 
 FU_SCENARIO_KEYS = {
@@ -87,9 +77,13 @@ DEFAULT_BUNDLE_SUBDIRS = {
     "report_card_summary": "01_report_card_summary",
     "region_summary": "02_region_summary",
     "basin_summary": "03_basin_summary",
-    "landuse_rainfall": "04_landuse_rainfall",
-    "source_sink_summary": "05_source_sink_summary",
-    "source_sink_sankey": "06_source_sink_sankey",
+    "subcatchment_summary": "04_subcatchment_summary",
+    "landuse_rainfall": "05_landuse_rainfall",
+    "source_sink_summary": "06_source_sink_summary",
+    "source_sink_sankey": "07_source_sink_sankey",
+    "fu_load_summary": "08_fu_load_summary",
+    "process_contribution_plots": "09_process_contribution_plots",
+    "change_summary_plots": "10_change_summary_plots",
     "other": "90_other",
 }
 
@@ -99,6 +93,8 @@ FILE_DESCRIPTIONS = {
     "gbr_summary_csv": "GBR-level flattened report-card summary combining FU and process outputs.",
     "region_summary_csv": "Region-level flattened report-card summary combining FU and process outputs.",
     "basin_summary_csv": "Basin-level flattened report-card summary combining FU and process outputs.",
+    "subcatchment_summary_csv": "Subcatchment-level FU-aggregated export summary for all constituents and scenarios.",
+    "subcatchment_summary_workbook": "Excel workbook containing subcatchment-level FU-aggregated report-card summary.",
     "summary_csv": "Combined flattened summary across GBR, region, and basin levels.",
     "summary_workbook": "Excel workbook containing metadata, QA, and all core summary tables.",
     "basin_fu_summary_csv": "Basin-level FU rows extracted from the core report-card basin summary.",
@@ -156,6 +152,55 @@ class StepResult:
     message: str = ""
 
 
+def _normalise_constituents_no_tss(
+    constituents: list[str] | None,
+) -> list[str] | None:
+    if constituents is None:
+        return None
+
+    out = [str(c).strip().upper() for c in constituents if str(c).strip()]
+
+    if "TSS" in out:
+        raise ValueError(
+            "TSS is not supported here. Use FS for fine sediment."
+        )
+
+    return out
+
+
+def _file_description(file_key: str | None) -> str:
+    if not file_key:
+        return "No files produced."
+
+    if file_key in FILE_DESCRIPTIONS:
+        return FILE_DESCRIPTIONS[file_key]
+
+    key = str(file_key)
+
+    if key.endswith("_tonnage_png"):
+        return "Process-based stacked bar plot showing tonnage/load contribution by process."
+
+    if key.endswith("_percent_png"):
+        return "Process-based stacked bar plot showing percentage contribution by process."
+
+    if key.endswith("_export_csv"):
+        return "GBR management-unit export tonnage/load table used by process contribution plots."
+
+    if key.startswith("process_change_csv_"):
+        return "BASE - CHANGE process change values by basin and process."
+
+    if key.startswith("process_change_plot_"):
+        return "BASE - CHANGE process change plot by basin and process."
+
+    if key.startswith("percent_reduction_csv_"):
+        return "Percent reduction values: (BASE - CHANGE) / (BASE - PREDEV) * 100."
+
+    if key.startswith("percent_reduction_plot_"):
+        return "Percent reduction plot by Basin_35."
+
+    return "No description available."
+
+
 def _empty_summary_df() -> pd.DataFrame:
     return pd.DataFrame(columns=SUMMARY_COLUMNS)
 
@@ -172,12 +217,11 @@ def _normalise_first_index_column(df: pd.DataFrame, name: str) -> pd.DataFrame:
 
 
 def _report_unit_for_constituent(constituent: str | None) -> str:
-    """
-    Return the actual report-card unit for a constituent.
-    """
     key = str(constituent).strip().upper() if constituent is not None else ""
+
     if key in {"FS", "CS"}:
         return "kt/yr"
+
     return "t/yr"
 
 
@@ -194,8 +238,8 @@ def _flatten_fu_wide_table(
         return _empty_summary_df()
 
     temp = _normalise_first_index_column(df, "FU")
-
     value_vars = [c for c in temp.columns if c != "FU"]
+
     if not value_vars:
         return _empty_summary_df()
 
@@ -253,6 +297,7 @@ def _flatten_fu_region_tables(
 
     for key, scenario_name in FU_REGION_SCENARIO_KEYS.items():
         region_dict = fu_result.get(key, {})
+
         if not isinstance(region_dict, dict):
             continue
 
@@ -281,6 +326,7 @@ def _flatten_fu_basin_tables(
 
     for key, scenario_name in FU_BASIN_SCENARIO_KEYS.items():
         region_basin_dict = fu_basin_result.get(key, {})
+
         if not isinstance(region_basin_dict, dict):
             continue
 
@@ -312,17 +358,6 @@ def _convert_process_basin_tables(
     cfg: GBRConfig,
     units: str,
 ) -> dict[str, dict[str, dict[str, pd.DataFrame]]]:
-    """
-    Convert raw basin-level process tables to requested units and relabel
-    the single value column.
-
-    build_process_export_summaries() converts region and combined process
-    summaries, but not basin summaries.
-
-    Process summary tables are single-constituent tables:
-    - index = Process
-    - one numeric value column
-    """
     out: dict[str, dict[str, dict[str, pd.DataFrame]]] = {}
 
     for region, basin_dict in basin_by_region.items():
@@ -338,23 +373,29 @@ def _convert_process_basin_tables(
 
                 df_units = df.copy()
                 value_col = df_units.columns[0]
+
                 df_units[value_col] = pd.to_numeric(
-                    df_units[value_col], errors="coerce"
+                    df_units[value_col],
+                    errors="coerce",
                 ).fillna(0.0)
 
                 if units == "report":
                     final_units = _report_unit_for_constituent(constituent)
+
                     if final_units == "kt/yr":
-                        df_units[value_col] = df_units[value_col] / 1e6 / cfg.model_years
+                        df_units[value_col] = (
+                            df_units[value_col] / 1e6 / cfg.model_years
+                        )
                     else:
-                        df_units[value_col] = df_units[value_col] / 1e3 / cfg.model_years
+                        df_units[value_col] = (
+                            df_units[value_col] / 1e3 / cfg.model_years
+                        )
 
                     df_units = rename_units_column(
                         df_units,
                         base_name="LoadToRegExport",
                         units=final_units,
                     )
-
                 else:
                     df_units = apply_units(
                         df_units,
@@ -386,8 +427,8 @@ def _flatten_process_constituent_table(
         return _empty_summary_df()
 
     temp = _normalise_first_index_column(df, "Process")
-
     value_cols = [c for c in temp.columns if c != "Process"]
+
     if not value_cols:
         return _empty_summary_df()
 
@@ -531,6 +572,7 @@ def _sort_summary(df: pd.DataFrame) -> pd.DataFrame:
         ]
         if c in df.columns
     ]
+
     return df.sort_values(sort_cols).reset_index(drop=True)
 
 
@@ -580,11 +622,7 @@ def _build_qa_summary_table(
                 "" if missing == 0 else f"{missing} rows missing {col}.",
             )
 
-    def check_duplicates(
-        df: pd.DataFrame,
-        *,
-        level: str,
-    ) -> None:
+    def check_duplicates(df: pd.DataFrame, *, level: str) -> None:
         if df.empty:
             add_row("duplicate_rows", level, "WARN", 0, "Summary table is empty.")
             return
@@ -603,6 +641,7 @@ def _build_qa_summary_table(
         key_cols = [c for c in key_cols if c in df.columns]
 
         dup_count = int(df.duplicated(subset=key_cols, keep=False).sum())
+
         add_row(
             "duplicate_rows",
             level,
@@ -617,28 +656,45 @@ def _build_qa_summary_table(
             return
 
         neg_count = int((pd.to_numeric(df["Value"], errors="coerce") < 0).sum())
+
         add_row(
             "negative_values",
             level,
             "PASS" if neg_count == 0 else "WARN",
             neg_count,
-            "Negative values may be valid for anthropogenic/reduction-type outputs."
-            if neg_count > 0
-            else "",
+            (
+                "Negative values may be valid for anthropogenic/reduction-type outputs."
+                if neg_count > 0
+                else ""
+            ),
         )
 
     def check_percent_reduction_bounds(df: pd.DataFrame, *, level: str) -> None:
         if df.empty or "Scenario" not in df.columns or "Value" not in df.columns:
-            add_row("percent_reduction_bounds", level, "WARN", 0, "No values available.")
+            add_row(
+                "percent_reduction_bounds",
+                level,
+                "WARN",
+                0,
+                "No values available.",
+            )
             return
 
         pr = df.loc[df["Scenario"] == "PERCENT_REDUCTION"].copy()
+
         if pr.empty:
-            add_row("percent_reduction_bounds", level, "WARN", 0, "No PERCENT_REDUCTION rows.")
+            add_row(
+                "percent_reduction_bounds",
+                level,
+                "WARN",
+                0,
+                "No PERCENT_REDUCTION rows.",
+            )
             return
 
         vals = pd.to_numeric(pr["Value"], errors="coerce")
         bad = int(((vals < -100) | (vals > 100)).sum())
+
         add_row(
             "percent_reduction_bounds",
             level,
@@ -653,6 +709,7 @@ def _build_qa_summary_table(
             return
 
         missing = int(pd.to_numeric(df["Value"], errors="coerce").isna().sum())
+
         add_row(
             "missing_value",
             level,
@@ -674,7 +731,14 @@ def _build_qa_summary_table(
     check_missing_ids(
         region_summary,
         level="Region",
-        required_cols=["Source", "MetricType", "Scenario", "Level", "Region", "Constituent"],
+        required_cols=[
+            "Source",
+            "MetricType",
+            "Scenario",
+            "Level",
+            "Region",
+            "Constituent",
+        ],
     )
     check_duplicates(region_summary, level="Region")
     check_negative_values(region_summary, level="Region")
@@ -684,7 +748,15 @@ def _build_qa_summary_table(
     check_missing_ids(
         basin_summary,
         level="Basin",
-        required_cols=["Source", "MetricType", "Scenario", "Level", "Region", "Basin", "Constituent"],
+        required_cols=[
+            "Source",
+            "MetricType",
+            "Scenario",
+            "Level",
+            "Region",
+            "Basin",
+            "Constituent",
+        ],
     )
     check_duplicates(basin_summary, level="Basin")
     check_negative_values(basin_summary, level="Basin")
@@ -692,7 +764,13 @@ def _build_qa_summary_table(
     check_missing_value(basin_summary, level="Basin")
 
     if summary.empty:
-        add_row("all_summary_empty", "ALL", "WARN", 1, "Final combined summary is empty.")
+        add_row(
+            "all_summary_empty",
+            "ALL",
+            "WARN",
+            1,
+            "Final combined summary is empty.",
+        )
     else:
         add_row("all_summary_empty", "ALL", "PASS", 0, "")
 
@@ -734,7 +812,10 @@ def _build_metadata_table(
     )
 
 
-def _write_step_summary(step_results: list[StepResult], output_path: Path) -> pd.DataFrame:
+def _write_step_summary(
+    step_results: list[StepResult],
+    output_path: Path,
+) -> pd.DataFrame:
     rows = []
 
     for s in step_results:
@@ -747,10 +828,7 @@ def _write_step_summary(step_results: list[StepResult], output_path: Path) -> pd
                         "OutputDir": str(s.output_dir),
                         "FileType": file_key,
                         "FilePath": file_path,
-                        "Description": FILE_DESCRIPTIONS.get(
-                            file_key,
-                            "No description available.",
-                        ),
+                        "Description": _file_description(file_key),
                         "Message": s.message,
                     }
                 )
@@ -770,6 +848,7 @@ def _write_step_summary(step_results: list[StepResult], output_path: Path) -> pd
     df = pd.DataFrame(rows)
     df = df.sort_values(["Step", "FileType"], na_position="last").reset_index(drop=True)
     df.to_csv(output_path, index=False)
+
     return df
 
 
@@ -824,6 +903,7 @@ def _write_bundle_readme(
     else:
         for step_name in step_summary_df["Step"].dropna().astype(str).unique():
             step_rows = step_summary_df.loc[step_summary_df["Step"] == step_name].copy()
+
             if step_rows.empty:
                 continue
 
@@ -832,6 +912,7 @@ def _write_bundle_readme(
 
             lines.append(f"[{step_name}]")
             lines.append(f"Status: {step_status}")
+
             if pd.notna(step_message) and str(step_message).strip():
                 lines.append(f"Message: {step_message}")
 
@@ -854,24 +935,20 @@ def _write_bundle_readme(
     lines.append("1. The step summary CSV contains one output file per row.")
     lines.append("2. Core report-card summary outputs are written to 01_report_card_summary.")
     lines.append("3. In flattened summary tables, Units shows actual units such as kt/yr or t/yr.")
+    lines.append("4. Process contribution plots are written to 09_process_contribution_plots.")
+    lines.append("5. Change summary plots are written to 10_change_summary_plots.")
+    lines.append("6. Fine sediment is FS. TSS is not used.")
     lines.append("")
 
     output_path.write_text("\n".join(lines), encoding="utf-8")
 
 
-
-
-def _call_step_with_supported_kwargs(step_fn: Callable[..., Any], **kwargs: Any) -> Any:
-    """
-    Call an extra workflow step with only the keyword arguments it supports.
-
-    This makes the bundle runner tolerant of different workflow function
-    signatures. For example, source-sink workflows may accept either
-    process_model, model, or scenario.
-    """
+def _call_step_with_supported_kwargs(
+    step_fn: Callable[..., Any],
+    **kwargs: Any,
+) -> Any:
     sig = inspect.signature(step_fn)
 
-    # If the callable accepts **kwargs, pass everything through.
     if any(
         p.kind == inspect.Parameter.VAR_KEYWORD
         for p in sig.parameters.values()
@@ -898,9 +975,17 @@ def run_report_card_summary(
 ) -> dict[str, object]:
     """
     Core FU + process report-card summary.
+
+    Process contribution plots are not written here.
+    They are written by run_report_card_bundle() to:
+    08_process_contribution_plots
     """
+    constituents = _normalise_constituents_no_tss(constituents)
+
     out_dir = ensure_output_dir(output_dir)
     unit_label = label_for_units(units)
+
+    files: dict[str, Path] = {}
 
     fu_result = build_fu_scenario_comparison(
         cfg=cfg,
@@ -948,11 +1033,13 @@ def run_report_card_summary(
         model=process_model,
         units=units,
     )
+
     process_region = _flatten_process_region_tables(
         process_result,
         model=process_model,
         units=units,
     )
+
     process_basin = _flatten_process_basin_tables(
         process_basin_converted,
         model=process_model,
@@ -964,11 +1051,13 @@ def run_report_card_summary(
         if not fu_gbr.empty or not process_gbr.empty
         else _empty_summary_df()
     )
+
     region_summary = _sort_summary(
         pd.concat([fu_region, process_region], ignore_index=True)
         if not fu_region.empty or not process_region.empty
         else _empty_summary_df()
     )
+
     basin_summary = _sort_summary(
         pd.concat([fu_basin, process_basin], ignore_index=True)
         if not fu_basin.empty or not process_basin.empty
@@ -997,8 +1086,6 @@ def run_report_card_summary(
         output_dir=out_dir,
     )
 
-    files: dict[str, Path] = {}
-
     metadata_csv = out_dir / "metadata.csv"
     qa_csv = out_dir / f"report_card_qa_summary_{unit_label}.csv"
     gbr_csv = out_dir / f"report_card_summary_gbr_{unit_label}.csv"
@@ -1022,6 +1109,7 @@ def run_report_card_summary(
 
     if export_excel_workbook:
         workbook_path = out_dir / f"report_card_summary_{unit_label}.xlsx"
+
         export_tables_to_excel(
             tables={
                 "metadata": meta,
@@ -1040,6 +1128,7 @@ def run_report_card_summary(
             output_path=workbook_path,
             index=False,
         )
+
         files["summary_workbook"] = workbook_path
 
     return {
@@ -1087,7 +1176,11 @@ def run_report_card_bundle(
     export_excel_workbook: bool = True,
     extra_steps: dict[str, Callable[..., Any]] | None = None,
     fail_fast: bool = False,
+    make_process_contribution_plots: bool = True,
+    make_subcatchment_summary: bool = True,
 ) -> dict[str, object]:
+    constituents = _normalise_constituents_no_tss(constituents)
+
     root = ensure_output_dir(output_root)
 
     bundle_dirs: dict[str, Path] = {
@@ -1106,6 +1199,7 @@ def run_report_card_bundle(
         value_column=value_column,
         output_dir=root,
     )
+
     bundle_meta_path = bundle_dirs["metadata"] / "bundle_metadata.csv"
     bundle_meta.to_csv(bundle_meta_path, index=False)
 
@@ -1119,7 +1213,9 @@ def run_report_card_bundle(
             process_model=process_model,
             export_excel_workbook=export_excel_workbook,
         )
+
         outputs["report_card_summary"] = core
+
         step_results.append(
             StepResult(
                 name="report_card_summary",
@@ -1129,6 +1225,53 @@ def run_report_card_bundle(
                 message="Core FU + process report-card summary completed.",
             )
         )
+
+        if make_subcatchment_summary:
+            subcatchment = run_subcatchment_summary(
+                cfg=cfg,
+                output_dir=bundle_dirs["subcatchment_summary"],
+                constituents=constituents,
+                value_column=value_column,
+                units=units,
+                scenarios=["PREDEV", "BASE", "CHANGE"],
+                export_excel_workbook=export_excel_workbook,
+            )
+
+            outputs["subcatchment_summary"] = subcatchment
+
+            step_results.append(
+                StepResult(
+                    name="subcatchment_summary",
+                    status="SUCCESS",
+                    output_dir=bundle_dirs["subcatchment_summary"],
+                    files={k: str(v) for k, v in subcatchment.get("files", {}).items()},
+                    message="Subcatchment FU-aggregated report-card summary completed.",
+                )
+            )
+
+        if make_process_contribution_plots:
+            basin_by_region = core["process_result"]["basin_by_region"]
+
+            process_plot_files = plot_process_contribution_exports(
+                basin_by_region,
+                output_dir=bundle_dirs["process_contribution_plots"],
+                constituents=constituents,
+                years=cfg.model_years,
+                value_column=value_column,
+            )
+
+            outputs["process_contribution_plots"] = process_plot_files
+
+            step_results.append(
+                StepResult(
+                    name="process_contribution_plots",
+                    status="SUCCESS",
+                    output_dir=bundle_dirs["process_contribution_plots"],
+                    files={k: str(v) for k, v in process_plot_files.items()},
+                    message="Process contribution plots completed.",
+                )
+            )
+
     except Exception as exc:
         step_results.append(
             StepResult(
@@ -1139,11 +1282,13 @@ def run_report_card_bundle(
                 message=f"{exc}\n\n{traceback.format_exc()}",
             )
         )
+
         if fail_fast:
             step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
             step_summary_df = _write_step_summary(step_results, step_summary_path)
 
             readme_path = bundle_dirs["metadata"] / "README.txt"
+
             _write_bundle_readme(
                 output_path=readme_path,
                 output_root=root,
@@ -1151,10 +1296,14 @@ def run_report_card_bundle(
                 bundle_meta=bundle_meta,
                 step_summary_df=step_summary_df,
             )
+
             raise
 
     for step_name, step_fn in (extra_steps or {}).items():
-        step_dir = bundle_dirs.get(step_name, ensure_output_dir(bundle_dirs["other"] / step_name))
+        step_dir = bundle_dirs.get(
+            step_name,
+            ensure_output_dir(bundle_dirs["other"] / step_name),
+        )
 
         try:
             result = _call_step_with_supported_kwargs(
@@ -1174,12 +1323,15 @@ def run_report_card_bundle(
             )
 
             files = {}
+
             if isinstance(result, dict):
                 raw_files = result.get("files", {})
+
                 if isinstance(raw_files, dict):
                     files = {k: str(v) for k, v in raw_files.items()}
 
             outputs[step_name] = result
+
             step_results.append(
                 StepResult(
                     name=step_name,
@@ -1200,11 +1352,13 @@ def run_report_card_bundle(
                     message=str(exc),
                 )
             )
+
             if fail_fast:
                 step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
                 step_summary_df = _write_step_summary(step_results, step_summary_path)
 
                 readme_path = bundle_dirs["metadata"] / "README.txt"
+
                 _write_bundle_readme(
                     output_path=readme_path,
                     output_root=root,
@@ -1212,6 +1366,7 @@ def run_report_card_bundle(
                     bundle_meta=bundle_meta,
                     step_summary_df=step_summary_df,
                 )
+
                 raise
 
         except Exception as exc:
@@ -1224,11 +1379,13 @@ def run_report_card_bundle(
                     message=f"{exc}\n\n{traceback.format_exc()}",
                 )
             )
+
             if fail_fast:
                 step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
                 step_summary_df = _write_step_summary(step_results, step_summary_path)
 
                 readme_path = bundle_dirs["metadata"] / "README.txt"
+
                 _write_bundle_readme(
                     output_path=readme_path,
                     output_root=root,
@@ -1236,12 +1393,14 @@ def run_report_card_bundle(
                     bundle_meta=bundle_meta,
                     step_summary_df=step_summary_df,
                 )
+
                 raise
 
     step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
     step_summary_df = _write_step_summary(step_results, step_summary_path)
 
     readme_path = bundle_dirs["metadata"] / "README.txt"
+
     _write_bundle_readme(
         output_path=readme_path,
         output_root=root,

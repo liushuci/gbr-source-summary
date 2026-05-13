@@ -178,7 +178,7 @@ def _read_csv_cached(path_str: str) -> pd.DataFrame:
         raise
 
 
-    
+
 
 def _read_csv(path: Path) -> pd.DataFrame:
     return _read_csv_cached(str(path))
@@ -1275,7 +1275,19 @@ def run_landuse_rainfall_summary(
     for file_key, (table_key, filename) in csv_outputs.items():
         df = result.get(table_key, pd.DataFrame())
         path = out_dir / filename
-        df.to_csv(path, index=False)
+
+        if table_key == "land_use_stream_summary":
+            df = df.copy()
+
+            # Ensure region labels are exported as a real first column.
+            if df.index.name is None:
+                df.index.name = "Region"
+
+            df.to_csv(path, index=True, index_label="Region")
+
+        else:
+            df.to_csv(path, index=False)
+
         files[file_key] = path
 
     optional_csv_outputs = {

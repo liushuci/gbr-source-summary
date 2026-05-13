@@ -1,122 +1,415 @@
 # GBR Source Summary
 
-Python tools for summarising **eWater Source** and **OpenWater** model outputs for  
-**Great Barrier Reef (GBR) catchment water quality modelling**.
+A Python package for generating Great Barrier Reef (GBR) catchment modelling summaries, report card outputs, source–sink analysis, and Sankey visualisations from eWater Source / OpenWater model outputs.
 
-This package provides workflows to aggregate, compare, and report model outputs
-used in **Paddock-to-Reef (P2R)** modelling and **Reef Report Card** reporting.
-
----
-
-## Overview
-
-`gbr_source_summary` automates the extraction and summarisation of loads from
-GBR catchment models across multiple reporting scales, including:
-
-- Functional Unit (FU)
-- Basin / reporting region
-- Constituent
-- Model scenario
-
-Typical outputs include:
-
-- **Total loads**
-- **Anthropogenic loads**
-- **Load reductions**
-- **Percent reductions**
-
-These summaries support reporting workflows used in the  
-**Reef Report Card and related GBR modelling programs**.
-
----
-
-## Units
-
-All load summaries produced by this package are expressed as:
-
-kilograms (kg) over the full model simulation period
-
-Typical **RC13 builds** cover approximately:
-
-
-1993–2023 (~30 years)
-
-
-### Conversion to reporting units
-
-Sediment:
-
-
-kt/yr = kg / 1e6 / model_years
-
-
-Nutrients (DIN, PN, etc.):
-
-
-t/yr = kg / 1000 / model_years
-
+This package consolidates many of the workflows traditionally implemented in large analysis notebooks into reusable, configurable Python scripts and modules.
 
 ---
 
 ## Features
 
-- Functional Unit (FU) summaries
-- Basin / region aggregation
-- Scenario comparisons
-  - PREDEV
-  - BASE
-  - CHANGE
-- Anthropogenic load calculation
-- Load reduction reporting
-- Percent reduction calculation
+### Reporting Workflows
+
+* Functional Unit (FU) load summaries
+* Process-based summaries
+* Basin and regional summaries
+* Source–sink analysis
+* Sankey diagram generation
+* Report card bundle generation
+* Land use and rainfall summaries
+* Anthropogenic load calculations
+* Scenario comparisons:
+
+  * PREDEV
+  * BASE
+  * CHANGE
 
 ---
 
-## Basin summary workflow
+## Supported Constituents
 
-Generate basin-scale summaries and scenario comparisons:
+| Constituent | Description                    |
+| ----------- | ------------------------------ |
+| FS          | Fine Sediment                  |
+| CS          | Coarse Sediment                |
+| DIN         | Dissolved Inorganic Nitrogen   |
+| DON         | Dissolved Organic Nitrogen     |
+| PN          | Particulate Nitrogen           |
+| DIP         | Dissolved Inorganic Phosphorus |
+| DOP         | Dissolved Organic Phosphorus   |
+| PP          | Particulate Phosphorus         |
 
-python scripts/run_basin_summary.py \
---base-path F:/RC13_RC2023_24_Gold \
---basin-scale 48 \
---reporting-units report_card \
---value-column "LoadToStream (kg)"
+---
 
-Run QA checks:
+## Main Capabilities
 
-python scripts/check_basin_outputs.py \
---folder check_outputs/basin_summary/Manag_Unit_48/report_card \
---run-label Gold_93_23 \
---reporting-units report_card
+### Functional Unit Summaries
 
+Generate:
 
-## Repository Structure
+* Total loads
+* Areal loads
+* Regional summaries
+* GBR-wide summaries
+* Plot-ready tables
 
+---
 
+### Process-Based Reporting
+
+Summarise contributions from:
+
+* Hillslope
+* Gully
+* Streambank
+* Point source
+* Surface runoff
+* Seepage
+* Floodplain deposition
+* Reservoir deposition
+* Channel remobilisation
+* Stream deposition
+* Extraction losses
+
+---
+
+### Source–Sink Analysis
+
+Generate source-to-export summaries for:
+
+* Regions
+* Basins
+* Management Units (MU48)
+* Subcatchments
+
+Including:
+
+* Export pathways
+* Internal losses
+* Retention
+* Delivery ratios
+
+---
+
+### Sankey Visualisations
+
+Automatic Sankey generation for:
+
+* All regions
+* All basins
+* Multiple constituents
+
+Including:
+
+* Source → transport → export pathways
+* Automated unit handling
+* Consistent report-card formatting
+
+---
+
+### Report Card Bundle
+
+Single-command workflow that generates:
+
+* Regional summaries
+* Basin summaries
+* FU summaries
+* Process summaries
+* Source–sink summaries
+* Sankey diagrams
+* Excel workbooks
+* CSV exports
+* Metadata tables
+
+---
+
+# Installation
+
+## Clone Repository
+
+```bash
+git clone https://github.com/liushuci/gbr-source-summary.git
+cd gbr-source-summary
+```
+
+---
+
+## Create Environment
+
+```bash
+conda create -n gbr python=3.12
+conda activate gbr
+```
+
+---
+
+## Install Package
+
+```bash
+pip install -e .
+```
+
+---
+
+## Optional Dependencies
+
+Recommended companion packages:
+
+* openwater
+* dsed-py
+* veneer-py
+* hydrograph-py
+
+---
+
+# Repository Structure
+
+```text
 gbr_source_summary/
 │
-├─ src/
-│  └─ gbr_source_summary/
-│     ├─ config.py
-│     ├─ naming.py
-│     ├─ units.py
-│     ├─ io.py
-│     ├─ comparison.py
-│     ├─ qa.py
-│     │
-│     ├─ workflows_fu.py
-│     ├─ workflows_process.py
-│     ├─ workflows_basin.py
-│     └─ workflows_region.py
+├── scripts/
+│   ├── run_report_card_summary.py
+│   ├── run_basin_summary.py
+│   ├── run_fu_load_summary.py
+│   ├── run_process_report.py
+│   ├── run_source_sink_summary.py
+│   ├── run_source_sink_sankey_for_basin.py
+│   └── ...
 │
-├─ scripts/
-│  ├─ run_fu_summary.py
-│  ├─ run_process_summary.py
-│  ├─ run_basin_summary.py
-│  ├─ run_region_summary.py
-│  ├─ check_basin_outputs.py
-│  └─ run_all_reports.py
+├── src/gbr_source_summary/
+│   ├── config.py
+│   ├── units.py
+│   ├── export.py
+│   ├── export_excel.py
+│   ├── report_card_summary.py
+│   ├── report_fu.py
+│   ├── report_process.py
+│   ├── workflows_basin.py
+│   ├── workflows_fu.py
+│   ├── workflows_process.py
+│   ├── workflows_source_sink.py
+│   └── ...
 │
-├─ check_outputs/
-├─ README.md
-└─ .gitignore
+└── README.md
+```
+
+---
+
+# Typical Input Structure
+
+The package expects standard GBR Source/OpenWater outputs, typically organised as:
+
+```text
+Gold_ResultsSets_PointOfTruth/
+    CY/
+        Model_Outputs/
+            BASE_Gold_93_23/
+            PREDEV_Gold_93_23/
+            CHANGE_Gold_93_23/
+```
+
+---
+
+# Example Usage
+
+## Run Full Report Card Bundle
+
+```bash
+python scripts/run_report_card_summary.py ^
+    --main-path F:\RC13_RC2023_24_Gold ^
+    --output-root F:\RC13_RC2023_24_Gold\report_card_bundle ^
+    --regions CY,WT,BU,MW,FI,BM ^
+    --units report
+```
+
+---
+
+## Run Basin Summary
+
+```bash
+python scripts/run_basin_summary.py
+```
+
+---
+
+## Run Source–Sink Summary
+
+```bash
+python scripts/run_source_sink_summary.py
+```
+
+---
+
+## Generate Sankey Diagrams
+
+```bash
+python scripts/run_source_sink_sankey_for_basin.py
+```
+
+---
+
+# Unit Conventions
+
+## Report Card Units
+
+| Constituent | Unit    |
+| ----------- | ------- |
+| FS          | kt/year |
+| Others      | t/year  |
+
+---
+
+## Raw Units
+
+Internal calculations are generally stored as:
+
+```text
+kg
+kg/year
+kg/ha/year
+```
+
+Unit conversions are handled automatically via:
+
+```python
+apply_units()
+label_for_units()
+```
+
+---
+
+# Basin Scales
+
+Supported aggregation scales:
+
+| Alias              | Actual Column |
+| ------------------ | ------------- |
+| 35                 | Basin_35      |
+| Basin_35           | Basin_35      |
+| 48                 | Manag_Unit_48 |
+| MU_48              | Manag_Unit_48 |
+| management_unit_48 | Manag_Unit_48 |
+
+---
+
+# Key Data Sources
+
+Typical required files include:
+
+* `RegContributorDataGrid.csv`
+* `fuAreasTable.csv`
+* `ParameterTable.csv`
+* Climate tables
+* Regional lookup tables
+* GBR Phase 4 shapefiles
+
+---
+
+# Output Types
+
+Generated outputs include:
+
+* CSV tables
+* Excel workbooks
+* PNG plots
+* Sankey diagrams
+* QA summaries
+* Metadata tables
+
+---
+
+# Example Outputs
+
+## Functional Unit Summary
+
+* Regional load contributions
+* Areal loading rates
+* GBR-wide comparisons
+
+---
+
+## Source–Sink Summary
+
+* Generated load
+* Delivered load
+* Export load
+* Internal retention
+* Process contribution breakdowns
+
+---
+
+## Sankey Plots
+
+Visualisation of:
+
+```text
+Source → Delivery → Retention → Export
+```
+
+---
+
+# Development Notes
+
+The package is designed for:
+
+* RC13 / RC2023–25 workflows
+* OpenWater + Source interoperability
+* Large-scale batch processing
+* Reproducible reporting
+* QA-ready exports
+
+---
+
+# Future Improvements
+
+Planned enhancements include:
+
+* Parallel processing
+* Interactive dashboards
+* GeoPackage export support
+* Additional QA automation
+* Improved plotting themes
+* NetCDF direct readers
+
+---
+
+# Acknowledgements
+
+This workflow builds upon modelling and analysis approaches developed across:
+
+* Queensland Government
+* eWater
+* Flow Matters
+* Great Barrier Reef report card workflows
+* Paddock-to-Reef program workflows
+
+---
+
+# Related Projects
+
+* [https://github.com/flowmatters/openwater](https://github.com/flowmatters/openwater)
+* [https://github.com/flowmatters/dsed-py](https://github.com/flowmatters/dsed-py)
+* [https://github.com/flowmatters/veneer-py](https://github.com/flowmatters/veneer-py)
+* [https://github.com/flowmatters/hydrograph-py](https://github.com/flowmatters/hydrograph-py)
+
+---
+
+# License
+
+MIT License
+
+---
+
+# Contact
+
+Maintainer: Shuci Liu
+
+GitHub Repository:
+
+[https://github.com/liushuci/gbr-source-summary](https://github.com/liushuci/gbr-source-summary)
+
+---
+
+# Citation
+
+If using this package in reports or publications, please cite the repository and associated GBR modelling workflows.

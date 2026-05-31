@@ -145,21 +145,25 @@ def _build_reflective_step(
             candidate_names,
         )
 
+        call_kwargs = {
+            "cfg": cfg,
+            "output_dir": output_dir,
+            "output_root": output_dir,
+            "out_dir": output_dir,
+            "constituents": constituents,
+            "value_column": value_column,
+            "units": units,
+            "process_model": process_model,
+            "model": process_model,
+            "scenario": process_model,
+            "regions": getattr(cfg, "regions", None),
+            "bundle_dirs": bundle_dirs,
+        }
+        call_kwargs.update(extra_kwargs)
+
         return _call_with_supported_kwargs(
             func,
-            cfg=cfg,
-            output_dir=output_dir,
-            output_root=output_dir,
-            out_dir=output_dir,
-            constituents=constituents,
-            value_column=value_column,
-            units=units,
-            process_model=process_model,
-            model=process_model,
-            scenario=process_model,
-            regions=getattr(cfg, "regions", None),
-            bundle_dirs=bundle_dirs,
-            **extra_kwargs,
+            **call_kwargs,
         )
 
     return _runner
@@ -401,12 +405,18 @@ def main() -> None:
 
     if not args.skip_sankey:
         extra_steps["source_sink_sankey"] = _build_reflective_step(
-            module_name="gbr_source_summary.workflows_source_sink",
+            module_name="gbr_source_summary.run_sankey_for_all_basins",
             candidate_names=[
-                "run_source_sink_sankey_all_basins",
                 "run_source_sink_sankey_for_all_basins",
+                "run_source_sink_sankey_all_basins",
                 "export_source_sink_sankey_all_basins",
             ],
+            extra_kwargs={
+                "base_path": Path(args.main_path),
+                "main_path": Path(args.main_path),
+                "source_sink_dir": Path(args.output_root) / "06_source_sink_summary",
+                "basin_scale": "MU48",
+            },
         )
 
     if not args.skip_fu_load:

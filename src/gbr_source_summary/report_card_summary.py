@@ -1306,20 +1306,37 @@ def run_report_card_bundle(
         )
 
         try:
+            step_kwargs = {
+                "cfg": cfg,
+                "output_dir": step_dir,
+                "output_root": step_dir,
+                "out_dir": step_dir,
+                "constituents": constituents,
+                "value_column": value_column,
+                "units": units,
+                "process_model": process_model,
+                "model": process_model,
+                "scenario": process_model,
+                "regions": getattr(cfg, "regions", None),
+                "bundle_dirs": bundle_dirs,
+            }
+
+            # Make Sankey extra steps self-contained. The Sankey runner needs
+            # the model root and the already-created source-sink summary folder,
+            # otherwise it may be launched with no CLI arguments and fail.
+            if step_name == "source_sink_sankey":
+                step_kwargs.update(
+                    {
+                        "base_path": getattr(cfg, "main_path", None),
+                        "main_path": getattr(cfg, "main_path", None),
+                        "source_sink_dir": bundle_dirs.get("source_sink_summary"),
+                        "basin_scale": "MU48",
+                    }
+                )
+
             result = _call_step_with_supported_kwargs(
                 step_fn,
-                cfg=cfg,
-                output_dir=step_dir,
-                output_root=step_dir,
-                out_dir=step_dir,
-                constituents=constituents,
-                value_column=value_column,
-                units=units,
-                process_model=process_model,
-                model=process_model,
-                scenario=process_model,
-                regions=getattr(cfg, "regions", None),
-                bundle_dirs=bundle_dirs,
+                **step_kwargs,
             )
 
             files = {}

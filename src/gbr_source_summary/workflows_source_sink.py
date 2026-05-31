@@ -1141,6 +1141,42 @@ def _find_lookup_path(
     )
 
 
+def _find_reg_cat_node_link_path(
+    cfg: GBRConfig,
+    region: str,
+) -> Path:
+    """
+    Locate the region ModelElement-to-basin/management-unit lookup table.
+
+    Source-sink RawResults.csv contains gauges, outlet nodes, reservoirs,
+    links and "Node on catchment SC #..." elements, so it must be joined
+    to *_Reg_cat_node_link.csv rather than *_Subcat_Regions_LUT.csv.
+    """
+    main_path = _cfg_main_path(cfg)
+
+    candidates = [
+        main_path / "regionalisations" / f"{region}_Reg_cat_node_link.csv",
+        main_path / "Regionalisations" / f"{region}_Reg_cat_node_link.csv",
+        main_path / region / f"{region}_Reg_cat_node_link.csv",
+        main_path / f"{region}_Reg_cat_node_link.csv",
+    ]
+
+    for p in candidates:
+        if p.exists():
+            return p
+
+    # Last-resort recursive search. Kept after explicit candidates so it is not
+    # expensive during normal runs.
+    matches = list(main_path.rglob(f"{region}_Reg_cat_node_link.csv"))
+    if matches:
+        return matches[0]
+
+    raise FileNotFoundError(
+        "Could not find region Reg_cat_node_link CSV. Tried:\n"
+        + "\n".join(str(p) for p in candidates)
+    )
+
+
 def _empty_source_sink_outputs() -> dict[str, pd.DataFrame]:
     basin_cols = [
         "Region",
@@ -1198,8 +1234,9 @@ def run_source_sink_summary(
     """
     Build source-sink summaries for the report-card bundle wrapper.
 
-    This runner intentionally uses RawResults.csv + the region LUT directly.
-    It does not require RegContributorDataGrid.
+    This runner intentionally uses RawResults.csv + the region
+    *_Reg_cat_node_link.csv lookup directly. It does not require
+    RegContributorDataGrid.
 
     Outputs
     -------
@@ -1228,7 +1265,7 @@ def run_source_sink_summary(
             region=region,
             scenario=selected_scenario,
         )
-        lut_path = _find_lookup_path(
+        lut_path = _find_reg_cat_node_link_path(
             cfg=cfg,
             region=region,
         )

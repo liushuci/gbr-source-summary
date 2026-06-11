@@ -57,9 +57,4 @@ dependencies:
   # ---------------------------------------------------------------------------
   - pytest=8.4.0
 
-  - pip
-
-  - pip:
-
-      # GBR package itself
-      - git+https://github.com/liushuci/gbr-source-summary.git
+ 

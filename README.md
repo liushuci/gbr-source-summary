@@ -82,7 +82,7 @@ Summarise contributions from:
 * Reservoir deposition
 * Stream deposition
 * Extraction losses
-* Channel remobilisation
+
 
 ---
 
@@ -220,25 +220,35 @@ rsdr_shapefile.py
 
 # Installation
 
-## Clone Repository
+## 1. Clone Repository
 
 ```bash
 git clone https://github.com/liushuci/gbr-source-summary.git
+
 cd gbr-source-summary
 ```
 
 ---
 
-## Create Environment
+## 2. Create Environment
+
+Create the recommended conda environment from the packaged environment file:
 
 ```bash
-conda create -n gbr python=3.12
-conda activate gbr
+conda env create -f environment.yml
+```
+
+Activate the environment:
+
+```bash
+conda activate gbr-source-summary
 ```
 
 ---
 
-## Install Package
+## 3. Install Package
+
+Install the package in editable mode:
 
 ```bash
 pip install -e .
@@ -246,14 +256,11 @@ pip install -e .
 
 ---
 
-## Optional Dependencies
+## 4. Verify Installation
 
-Recommended companion packages:
-
-* openwater
-* dsed-py
-* veneer-py
-* hydrograph-py
+```bash
+python -c "import gbr_source_summary; print('GBR Source Summary installed successfully')"
+```
 
 ---
 

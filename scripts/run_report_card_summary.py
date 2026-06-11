@@ -1,29 +1,5 @@
 """
 Master runner for gbr_source_summary report-card outputs.
-
-This runner creates a full report-card bundle and optionally runs:
-- region summary
-- basin summary
-- subcatchment summary
-- landuse / rainfall summary
-- source-sink summary
-- source-sink sankey
-- FU load summary
-- process contribution plots
-- change summary plots
-
-Process contribution plots are handled inside run_report_card_bundle()
-and are written to:
-
-    09_process_contribution_plots
-
-Change summary plots are handled as an extra workflow step and are written to:
-
-    10_change_summary_plots
-
-Notes
------
-- Fine sediment is FS. Do not use TSS.
 """
 
 from __future__ import annotations
@@ -36,16 +12,10 @@ from typing import Any, Callable
 
 from gbr_source_summary.config import GBRConfig
 from gbr_source_summary.report_card_summary import run_report_card_bundle
+from gbr_source_summary.package_data import package_data_path
 
 
 def _maybe_list(value: str | None) -> list[str] | None:
-    """
-    Convert comma-separated CLI text to a list.
-
-    Example
-    -------
-    "CY,WT,BU" -> ["CY", "WT", "BU"]
-    """
     if value is None:
         return None
 
@@ -63,9 +33,6 @@ def _set_cfg_attr_if_present(
     name: str,
     value: Any,
 ) -> None:
-    """
-    Set a GBRConfig attribute only when it exists and value is not None.
-    """
     if value is None:
         return
 
@@ -77,9 +44,6 @@ def _call_with_supported_kwargs(
     func: Callable[..., Any],
     **kwargs: Any,
 ) -> Any:
-    """
-    Call a function with only the kwargs it supports.
-    """
     sig = inspect.signature(func)
 
     if any(
@@ -101,9 +65,6 @@ def _resolve_callable(
     module_name: str,
     candidate_names: list[str],
 ) -> Callable[..., Any]:
-    """
-    Import a module and return the first available callable.
-    """
     module = importlib.import_module(module_name)
 
     for name in candidate_names:
@@ -124,9 +85,6 @@ def _build_reflective_step(
     candidate_names: list[str],
     extra_kwargs: dict[str, Any] | None = None,
 ) -> Callable[..., Any]:
-    """
-    Create a lazy extra-step runner for run_report_card_bundle().
-    """
     extra_kwargs = extra_kwargs or {}
 
     def _runner(
@@ -139,7 +97,6 @@ def _build_reflective_step(
         process_model: str = "BASE",
         bundle_dirs: dict[str, Path] | None = None,
     ) -> Any:
-
         func = _resolve_callable(
             module_name,
             candidate_names,
@@ -169,6 +126,68 @@ def _build_reflective_step(
     return _runner
 
 
+def _build_modelled_vs_measured_step(
+    *,
+    gbrclmp_file: Path,
+    model_results_prefix: Path,
+    reportcard_outputs_prefix: Path,
+    regions: list[str] | None,
+    scenario_folder: str,
+    make_plots: bool,
+) -> Callable[..., Any]:
+    reportcard_outputs_prefix = Path(reportcard_outputs_prefix)
+    gbrclmp_file = Path(gbrclmp_file)
+    model_results_prefix = Path(model_results_prefix)
+
+    def _runner(
+        *,
+        cfg: GBRConfig,
+        output_dir: Path,
+        constituents: list[str] | None = None,
+        value_column: str = "LoadToRegExport (kg)",
+        units: str = "report",
+        process_model: str = "BASE",
+        bundle_dirs: dict[str, Path] | None = None,
+    ) -> Any:
+        from gbr_source_summary.modelled_vs_measured import (
+            run_modelled_vs_measured,
+        )
+
+        reportcard_outputs_prefix.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        selected_regions = regions or getattr(cfg, "regions", None)
+
+        call_kwargs = {
+            "cfg": cfg,
+            "gbrclmp_file": gbrclmp_file,
+            "model_results_prefix": model_results_prefix,
+            "reportcard_outputs_prefix": reportcard_outputs_prefix,
+            "output_dir": reportcard_outputs_prefix,
+            "output_root": reportcard_outputs_prefix,
+            "out_dir": reportcard_outputs_prefix,
+            "regions": selected_regions,
+            "scenario_folder": scenario_folder,
+            "make_plots": make_plots,
+            "constituents": constituents,
+            "value_column": value_column,
+            "units": units,
+            "process_model": process_model,
+            "model": process_model,
+            "scenario": process_model,
+            "bundle_dirs": bundle_dirs,
+        }
+
+        return _call_with_supported_kwargs(
+            run_modelled_vs_measured,
+            **call_kwargs,
+        )
+
+    return _runner
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run full report-card summary bundle."
@@ -179,6 +198,13 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         required=True,
         help="Main model/data path, e.g. F:/RC13_RC2023_24_Gold.",
+    )
+
+    parser.add_argument(
+        "--rc",
+        type=str,
+        default="Gold_93_23",
+        help="Model output folder suffix, e.g. Gold_93_23 or RC2022.",
     )
 
     parser.add_argument(
@@ -256,18 +282,54 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--skip-process-plots",
         action="store_true",
-        help=(
-            "Skip process contribution tonnage and percent plots. "
-            "If not set, plots are written to 09_process_contribution_plots."
-        ),
+        help="Skip process contribution plots.",
     )
 
     parser.add_argument(
         "--skip-change-plots",
         action="store_true",
+        help="Skip change summary plots.",
+    )
+
+    parser.add_argument(
+        "--skip-modelled-vs-measured",
+        action="store_true",
+        help="Skip GBRCLMP modelled-vs-measured outputs.",
+    )
+
+    parser.add_argument(
+        "--skip-modelled-vs-measured-plots",
+        action="store_true",
+        help="Run modelled-vs-measured CSV/Moriasi outputs but skip plots.",
+    )
+
+    parser.add_argument(
+        "--gbrclmp-file",
+        type=str,
+        default=None,
         help=(
-            "Skip change summary plots. "
-            "If not set, plots are written to 10_change_summary_plots."
+            "GBRCLMP master CSV. If omitted, packaged monitoring_data "
+            "CSV is used."
+        ),
+    )
+
+    parser.add_argument(
+        "--model-results-prefix",
+        type=str,
+        default=None,
+        help=(
+            "Folder containing region model results. "
+            "Relative paths are resolved under --main-path."
+        ),
+    )
+
+    parser.add_argument(
+        "--modelled-vs-measured-scenario-folder",
+        type=str,
+        default="BASE_Gold_93_23",
+        help=(
+            "Scenario folder under <region>/Model_Outputs/ used by the "
+            "modelled-vs-measured workflow."
         ),
     )
 
@@ -314,6 +376,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--skip-rsdr",
+        action="store_true",
+        help="Skip RSDR shapefile and CSV export.",
+    )
+
+    parser.add_argument(
         "--skip-fu-load",
         action="store_true",
         help="Skip FU load/areal summary step.",
@@ -337,7 +405,17 @@ def main() -> None:
 
     cfg = GBRConfig(
         main_path=args.main_path,
+        rc=args.rc,
     )
+
+    infer_region = regions[0] if regions else cfg.regions[0]
+
+    cfg.infer_model_years(
+        region=infer_region,
+        model=args.process_model,
+    )
+
+    print(f"Inferred model years: {cfg.model_years}")
 
     _set_cfg_attr_if_present(
         cfg,
@@ -414,7 +492,8 @@ def main() -> None:
             extra_kwargs={
                 "base_path": Path(args.main_path),
                 "main_path": Path(args.main_path),
-                "source_sink_dir": Path(args.output_root) / "06_source_sink_summary",
+                "source_sink_dir": Path(args.output_root)
+                / "06_source_sink_summary",
                 "basin_scale": "MU48",
             },
         )
@@ -435,6 +514,51 @@ def main() -> None:
             ],
         )
 
+    gbrclmp_file: Path | None = None
+    model_results_prefix: Path | None = None
+
+    if not args.skip_modelled_vs_measured:
+        if args.gbrclmp_file:
+            gbrclmp_file = Path(args.gbrclmp_file)
+        else:
+            gbrclmp_file = package_data_path(
+                "monitoring_data",
+                "flowsLoadsGBRCLMP_GBR_allSites_MASTER.csv",
+            )
+
+        if args.model_results_prefix:
+            model_results_prefix = Path(args.model_results_prefix)
+
+            if not model_results_prefix.is_absolute():
+                model_results_prefix = (
+                    Path(args.main_path)
+                    / model_results_prefix
+                )
+        else:
+            model_results_prefix = Path(args.main_path)
+
+        print(f"GBRCLMP file: {gbrclmp_file}")
+        print(f"Model results prefix: {model_results_prefix}")
+
+        modelled_vs_measured_output_dir = (
+            Path(args.output_root)
+            / "11_modelled_vs_measured"
+        )
+
+        modelled_vs_measured_output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        extra_steps["modelled_vs_measured"] = _build_modelled_vs_measured_step(
+            gbrclmp_file=gbrclmp_file,
+            model_results_prefix=model_results_prefix,
+            reportcard_outputs_prefix=modelled_vs_measured_output_dir,
+            regions=regions,
+            scenario_folder=args.modelled_vs_measured_scenario_folder,
+            make_plots=not args.skip_modelled_vs_measured_plots,
+        )
+
     result = run_report_card_bundle(
         cfg=cfg,
         output_root=Path(args.output_root),
@@ -446,6 +570,7 @@ def main() -> None:
         extra_steps=extra_steps,
         fail_fast=args.fail_fast,
         make_process_contribution_plots=not args.skip_process_plots,
+        make_rsdr_outputs=not args.skip_rsdr,
     )
 
     print("\n=== Report-card bundle complete ===")
@@ -471,31 +596,32 @@ def main() -> None:
         "  Change summary plots      : "
         f"{'no' if args.skip_change_plots else 'yes'}"
     )
-
-    print("\nExpected subcatchment summary folder:")
     print(
-        Path(args.output_root)
-        / "04_subcatchment_summary"
+        "  Modelled-vs-measured      : "
+        f"{'no' if args.skip_modelled_vs_measured else 'yes'}"
+    )
+    print(
+        "  Sanky plots               : "
+        f"{'no' if args.skip_sankey else 'yes'}"
+    )
+    print(
+        "  RSDR shapefiles / CSV     : "
+        f"{'no' if args.skip_rsdr else 'yes'}"
     )
 
-    print("\nExpected process plot folder:")
-    print(
-        Path(args.output_root)
-        / "09_process_contribution_plots"
-    )
-
-    print("\nExpected change summary plot folder:")
-    print(
-        Path(args.output_root)
-        / "10_change_summary_plots"
-    )
-
-    print("\nStep summary:")
-    print(
-        result["step_summary"].to_string(
-            index=False,
+    if not args.skip_modelled_vs_measured:
+        print(
+            "  Modelled-vs-measured plots: "
+            f"{'no' if args.skip_modelled_vs_measured_plots else 'yes'}"
         )
-    )
+        print(
+            "  GBRCLMP file              : "
+            f"{gbrclmp_file}"
+        )
+        print(
+            "  Model results prefix      : "
+            f"{model_results_prefix}"
+        )
 
 
 if __name__ == "__main__":

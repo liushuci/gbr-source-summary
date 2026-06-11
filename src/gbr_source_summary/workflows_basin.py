@@ -31,7 +31,7 @@ from .comparison import (
 from .export import ensure_output_dir
 from .export_excel import export_tables_to_excel
 from .workflows_fu import build_fu_export_summaries, resolve_basin_column
-
+from .package_data import package_data_path
 
 def _add_raw_units(
     df: pd.DataFrame,

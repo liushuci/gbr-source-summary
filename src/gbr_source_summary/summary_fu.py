@@ -81,8 +81,11 @@ def build_basin_fu_summary(
         columns = constituents
     """
     grouped = (
-        df.groupby([basin_column, constituent_column, fu_column], dropna=False)
-        .sum(numeric_only=True)
+        df.groupby(
+                [basin_column, constituent_column, fu_column],
+                dropna=False,
+                observed=False,
+            ).sum(numeric_only=True)
     )
 
     basins = grouped.index.get_level_values(0).unique().tolist()

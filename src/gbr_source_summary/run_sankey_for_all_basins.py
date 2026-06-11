@@ -11,7 +11,12 @@ import pandas as pd
 
 from gbr_source_summary.naming import standardise_constituent_names
 
+import warnings
 
+warnings.filterwarnings(
+    "ignore",
+    message=r".*fixed .*limits to fulfill fixed data aspect.*",
+)
 # =========================================================
 # DEFAULTS
 # =========================================================
@@ -377,10 +382,16 @@ def load_source_sink_for_basin(
             f"constituent={constituent}, model={model}"
         )
 
-    work["DisplayValue"] = pd.to_numeric(
-        work[VALUE_COLUMN],
-        errors="coerce",
-    ).fillna(0.0)
+    if "DisplayValue" in work.columns:
+        work["DisplayValue"] = pd.to_numeric(
+            work["DisplayValue"],
+            errors="coerce",
+        ).fillna(0.0)
+    else:
+        work["DisplayValue"] = pd.to_numeric(
+            work[VALUE_COLUMN],
+            errors="coerce",
+        ).fillna(0.0)
 
     return work
 
@@ -393,7 +404,7 @@ def get_ss_value(df: pd.DataFrame, key: str) -> float:
     target = normalise_group_name(key)
     hit = df.loc[df["_BudgetGroup_norm"] == target, "DisplayValue"]
 
-    return float(hit.sum()) if not hit.empty else 0.0
+    return float(hit.abs().sum()) if not hit.empty else 0.0
 
 
 # =========================================================
@@ -785,42 +796,56 @@ def run_one(
         model=model,
     )
 
-    print(
-        "\nSource-sink summary rows: "
-        f"region={region}, basin={basin_name}, constituent={constituent}"
-    )
-    print(source_sink[["BudgetGroup", "DisplayValue"]])
+    # print(
+    #     "\nSource-sink summary rows: "
+    #     f"region={region}, basin={basin_name}, constituent={constituent}"
+    # )
+    # print(source_sink[["BudgetGroup", "DisplayValue"]])
 
     summary, total_supply, total_loss, total_export = build_summary_tables(
         source_sink=source_sink,
         constituent=constituent,
     )
 
-    balance_check = total_supply - total_loss - total_export
+    # summary_net = float(summary["DisplayValue"].sum())
 
-    print(f"\n=== {region} | {basin_name} | {constituent} ===")
-    print(summary)
-    print(
-        f"Total supply = {total_supply:.6f} "
-        f"{constituent_unit_label(constituent)}"
-    )
-    print(
-        f"Total loss   = {total_loss:.6f} "
-        f"{constituent_unit_label(constituent)}"
-    )
-    print(
-        f"Total export = {total_export:.6f} "
-        f"{constituent_unit_label(constituent)}"
-    )
-    print(
-        "Balance check "
-        f"(supply - loss - export) = {balance_check:.6f} "
-        f"{constituent_unit_label(constituent)}"
-    )
-    print(
-        f"Summary net = {summary['DisplayValue'].sum():.6f} "
-        f"{constituent_unit_label(constituent)}"
-    )
+    # if abs(summary_net) > 1e-6:
+    #     print(
+    #         "\nSource-sink summary rows: "
+    #         f"region={region}, basin={basin_name}, constituent={constituent}"
+    #     )
+    #     print(source_sink[["BudgetGroup", "DisplayValue"]])
+
+    #     print(
+    #         f"WARNING: Summary net = {summary_net:.6f} "
+    #         f"{constituent_unit_label(constituent)}"
+    #     )
+
+    # balance_check = total_supply - total_loss - total_export
+
+    # print(f"\n=== {region} | {basin_name} | {constituent} ===")
+    # print(summary)
+    # print(
+    #     f"Total supply = {total_supply:.6f} "
+    #     f"{constituent_unit_label(constituent)}"
+    # )
+    # print(
+    #     f"Total loss   = {total_loss:.6f} "
+    #     f"{constituent_unit_label(constituent)}"
+    # )
+    # print(
+    #     f"Total export = {total_export:.6f} "
+    #     f"{constituent_unit_label(constituent)}"
+    # )
+    # print(
+    #     "Balance check "
+    #     f"(supply - loss - export) = {balance_check:.6f} "
+    #     f"{constituent_unit_label(constituent)}"
+    # )
+    # print(
+    #     f"Summary net = {summary['DisplayValue'].sum():.6f} "
+    #     f"{constituent_unit_label(constituent)}"
+    # )
 
     out_path = make_plot(
         summary=summary,
@@ -835,7 +860,7 @@ def run_one(
         output_root=output_root,
     )
 
-    print(f"Saved: {out_path}")
+    #pint(f"Saved: {out_path}")
     return out_path
 
 
@@ -924,16 +949,16 @@ def run_source_sink_sankey_for_all_basins(
         basin_scale=resolved_basin_scale,
     )
 
-    print("\n============================================================")
-    print("Running Sankey generation")
-    print(f"Base path       : {resolved_base_path}")
-    print(f"Source-sink dir : {resolved_source_sink_dir}")
-    print(f"Basin scale     : {resolved_basin_scale}")
-    print(f"Model           : {resolved_model}")
-    print(f"Regions         : {', '.join(resolved_regions)}")
-    print(f"Constituents    : {', '.join(resolved_constituents)}")
-    print(f"Output root     : {resolved_output_root}")
-    print("============================================================")
+    # print("\n============================================================")
+    # print("Running Sankey generation")
+    # print(f"Base path       : {resolved_base_path}")
+    # print(f"Source-sink dir : {resolved_source_sink_dir}")
+    # print(f"Basin scale     : {resolved_basin_scale}")
+    # print(f"Model           : {resolved_model}")
+    # print(f"Regions         : {', '.join(resolved_regions)}")
+    # print(f"Constituents    : {', '.join(resolved_constituents)}")
+    # print(f"Output root     : {resolved_output_root}")
+    # print("============================================================")
 
     files: dict[str, Path] = {}
     skipped: list[str] = []
@@ -945,15 +970,15 @@ def run_source_sink_sankey_for_all_basins(
             model=resolved_model,
         )
 
-        print("\n" + "=" * 60)
-        print(f"Region      : {region}")
-        print(f"Basins found: {len(basin_list)}")
+        # print("\n" + "=" * 60)
+        # print(f"Region      : {region}")
+        # print(f"Basins found: {len(basin_list)}")
 
-        for constituent in resolved_constituents:
-            print(
-                f"Output dir ({constituent}) : "
-                f"{output_dir_for_region(region, resolved_basin_scale, constituent, resolved_output_root)}"
-            )
+        # for constituent in resolved_constituents:
+        #     print(
+        #         f"Output dir ({constituent}) : "
+        #         f"{output_dir_for_region(region, resolved_basin_scale, constituent, resolved_output_root)}"
+        #     )
 
         for basin_name in basin_list:
             for constituent in resolved_constituents:

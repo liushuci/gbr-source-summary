@@ -22,3 +22,14 @@ package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+gbr_source_summary = [
+    "data/**/*.csv",
+    "data/**/*.gpkg",
+    "data/**/*.shp",
+    "data/**/*.shx",
+    "data/**/*.dbf",
+    "data/**/*.prj",
+    "data/**/*.cpg",
+]

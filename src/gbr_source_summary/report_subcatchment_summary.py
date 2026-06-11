@@ -33,7 +33,7 @@ import pandas as pd
 from .config import GBRConfig
 from .export import ensure_output_dir
 from .units import label_for_units
-
+from .package_data import package_data_path
 
 SUMMARY_COLUMNS = [
     "Scenario",
@@ -150,44 +150,14 @@ def _find_region_lut_path(
     region: str,
 ) -> Path:
 
-    main_path = _cfg_main_path(cfg)
     region = str(region).strip().upper()
 
-    candidates = [
-        main_path / "Regions" / f"{region}_Subcat_Regions_LUT.csv",
-        main_path.parent / "Regions" / f"{region}_Subcat_Regions_LUT.csv",
-        main_path / f"{region}_Subcat_Regions_LUT.csv",
-    ]
-
-    for path in candidates:
-        if path.exists():
-            return path
-
-    search_roots = [
-        main_path / "Regions",
-        main_path.parent / "Regions",
-        main_path,
-        main_path.parent,
-    ]
-
-    for root in search_roots:
-        if root.exists():
-
-            matches = sorted(
-                root.glob(
-                    f"**/{region}_Subcat_Regions_LUT*.csv"
-                )
-            )
-
-            if matches:
-                return matches[0]
-
-    raise FileNotFoundError(
-        f"Could not find LUT for {region}. "
-        f"Expected file like "
-        f"{region}_Subcat_Regions_LUT.csv"
+    return Path(
+        package_data_path(
+            "region_lookup",
+            f"{region}_Subcat_Regions_LUT.csv",
+        )
     )
-
 
 def _load_regional_lut(
     cfg: GBRConfig,
@@ -199,7 +169,7 @@ def _load_regional_lut(
 
     lut_path = _find_region_lut_path(cfg, region)
 
-    print(f"Using LUT for {region}: {lut_path}")
+    #print(f"Using LUT for {region}: {lut_path}")
 
     lut = pd.read_csv(lut_path)
 
@@ -296,52 +266,26 @@ def _load_regcontributor(
     region: str,
     scenario: str,
 ) -> pd.DataFrame:
+    """
+    Load RegContributorDataGrid.csv for one region/scenario.
 
-    main_path = _cfg_main_path(cfg)
+    Uses cfg.get_model_output_dir(), which auto-detects folders such as:
+    PREDEV_RC2022
+    PREDEV_Gold_93_23
+    """
 
-    rc = (
-        getattr(cfg, "rc", None)
-        or getattr(cfg, "run_name", None)
-        or "Gold_93_23"
+    file_path = (
+        cfg.get_model_output_dir(region, scenario)
+        / "RegContributorDataGrid.csv"
     )
 
-    candidate_paths = [
-        main_path
-        / "Gold_ResultsSets_PointOfTruth"
-        / region
-        / "Model_Outputs"
-        / f"{scenario}_{rc}"
-        / "RegContributorDataGrid.csv",
-
-        main_path
-        / region
-        / "Model_Outputs"
-        / f"{scenario}_{rc}"
-        / "RegContributorDataGrid.csv",
-
-        main_path
-        / region
-        / f"{scenario}_{rc}"
-        / "RegContributorDataGrid.csv",
-    ]
-
-    csv_path = None
-
-    for path in candidate_paths:
-        if path.exists():
-            csv_path = path
-            break
-
-    if csv_path is None:
+    if not file_path.exists():
         raise FileNotFoundError(
-            f"Could not find RegContributorDataGrid.csv "
-            f"for {region} {scenario}. "
-            f"Tried: {candidate_paths}"
+            f"Could not find RegContributorDataGrid.csv for "
+            f"{region} {scenario}: {file_path}"
         )
 
-    print(f"Using RegContributor: {csv_path}")
-
-    return pd.read_csv(csv_path)
+    return pd.read_csv(file_path, low_memory=False)
 
 
 # =============================================================================
@@ -450,10 +394,10 @@ def build_subcatchment_summary(
 
             region = str(region).strip().upper()
 
-            print(
-                f"Building subcatchment summary: "
-                f"{region} {scenario_name}"
-            )
+            # print(
+            #     f"Building subcatchment summary: "
+            #     f"{region} {scenario_name}"
+            # )
 
             df = _load_regcontributor(
                 cfg=cfg,

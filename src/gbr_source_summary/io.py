@@ -21,6 +21,8 @@ from .config import GBRConfig
 
 from pathlib import Path
 
+from .package_data import package_data_path
+
 def ensure_output_dir(path: str | Path) -> Path:
     """
     Ensure an output directory exists and return it as a Path.
@@ -67,12 +69,20 @@ def load_raw_results(
     """
     Load RawResults.csv for a region/model.
     """
-    file_path = cfg.get_model_output_dir(region, model) / "RawResults.csv"
+    base_dir = cfg.get_model_output_dir(region, model)
 
-    if not file_path.exists():
-        raise FileNotFoundError(file_path)
+    csv_path = base_dir / "RawResults.csv"
+    xlsx_path = base_dir / "RawResults.xlsx"
 
-    return pd.read_csv(file_path)
+    if csv_path.exists():
+        return pd.read_csv(csv_path)
+
+    if xlsx_path.exists():
+        return pd.read_excel(xlsx_path)
+
+    raise FileNotFoundError(
+        f"Could not find RawResults.csv or RawResults.xlsx in {base_dir}"
+    )
 
 @lru_cache(maxsize=64)
 def _cached_reg_contributor_csv(file_path_str: str) -> pd.DataFrame:
@@ -93,7 +103,34 @@ def _cached_reg_contributor_csv(file_path_str: str) -> pd.DataFrame:
         },
     )
 
+def infer_model_years_from_results(
+    cfg: GBRConfig,
+    region: str,
+    model: str,
+) -> int:
+    """
+    Infer model duration from Num_Days in RegContributorDataGrid.csv.
+    """
 
+    file_path = (
+        cfg.get_model_output_dir(region, model)
+        / "RegContributorDataGrid.csv"
+    )
+
+    if not file_path.exists():
+        raise FileNotFoundError(file_path)
+
+    df = pd.read_csv(
+        file_path,
+        usecols=["Num_Days"],
+        nrows=1,
+    )
+
+    num_days = int(df["Num_Days"].iloc[0])
+
+    years = int(round(num_days / 365.25))
+
+    return years
 
 def load_reg_contributor_data_grid(
     cfg: GBRConfig,
@@ -134,18 +171,26 @@ def load_region_lut(
     region: str,
 ) -> pd.DataFrame:
     """
-    Load the region lookup table for a region.
+    Load packaged region lookup table.
 
-    This table is used to attach reporting attributes such as Manag_Unit_48
-    to Source output tables via ModelElement.
+    The LUT is expected at:
+    src/gbr_source_summary/data/region_lookup/<REGION>_Subcat_Regions_LUT.csv
     """
-    file_path = cfg.get_region_lut_path(region)
+    region = str(region).strip().upper()
+
+    file_path = Path(
+        package_data_path(
+            "region_lookup",
+            f"{region}_Subcat_Regions_LUT.csv",
+        )
+    )
 
     if not file_path.exists():
-        raise FileNotFoundError(file_path)
+        raise FileNotFoundError(
+            f"Packaged region LUT not found: {file_path}"
+        )
 
     return pd.read_csv(file_path)
-
 
 def load_reg_contributor_data_grid_with_lut(
     cfg: GBRConfig,

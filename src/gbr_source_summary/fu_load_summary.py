@@ -74,17 +74,47 @@ def _standardise_fu_names_in_series(s: pd.Series) -> pd.Series:
 
 
 def _extract_fu_series_from_wide_summary(df: pd.DataFrame, constituent: str) -> pd.Series:
-    if constituent not in df.columns:
-        raise KeyError(
-            f"Constituent '{constituent}' not found. Available columns: {list(df.columns)}"
+    """
+    Accept either:
+    1. wide format: FU | FS | CS | PN ...
+    2. long format: FU | Constituent | LoadToRegExport (kg)
+    3. single-constituent format indexed by FU with LoadToRegExport (kg)
+    """
+
+    df = df.copy()
+
+    # Case 1: wide format
+    if constituent in df.columns:
+        if "FU" in df.columns:
+            s = df.set_index("FU")[constituent].copy()
+        else:
+            s = df[constituent].copy()
+
+        return pd.to_numeric(s, errors="coerce").fillna(0.0)
+
+    # Case 2: long format
+    if {"FU", "Constituent", "LoadToRegExport (kg)"}.issubset(df.columns):
+        work = df.loc[df["Constituent"].astype(str).str.upper() == constituent].copy()
+
+        if work.empty:
+            return pd.Series(dtype=float)
+
+        s = (
+            work.groupby("FU")["LoadToRegExport (kg)"]
+            .sum()
         )
 
-    if "FU" in df.columns:
-        s = df.set_index("FU")[constituent].copy()
-    else:
-        s = df[constituent].copy()
+        return pd.to_numeric(s, errors="coerce").fillna(0.0)
 
-    return pd.to_numeric(s, errors="coerce").fillna(0.0)
+    # Case 3: already filtered single-constituent table
+    if "LoadToRegExport (kg)" in df.columns:
+        s = df["LoadToRegExport (kg)"].copy()
+
+        return pd.to_numeric(s, errors="coerce").fillna(0.0)
+
+    raise KeyError(
+        f"Constituent '{constituent}' not found. Available columns: {list(df.columns)}"
+    )
 
 
 def _clean_area_col_name(col: str) -> str:

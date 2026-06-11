@@ -1,39 +1,29 @@
-"""
-Model evaluation metrics for gbr_source_summary.
-
-This module provides reusable statistical metrics used in GBR model evaluation,
-especially for Moriasi-style comparisons between monitored and modelled values.
-
-Implemented metrics:
-- R²
-- NSE
-- PBIAS
-- RSR
-
-All functions first coerce input to numeric values and remove missing pairs.
-"""
-
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
 
-def _clean_pair(observed, modelled) -> pd.DataFrame:
-    """
-    Convert observed/modelled inputs to numeric series and drop missing pairs.
+def _to_1d_numeric_array(x) -> np.ndarray:
+    arr = np.asarray(x, dtype=object)
 
-    Returns
-    -------
-    pd.DataFrame
-        Two-column dataframe with columns:
-        - observed
-        - modelled
-    """
+    if arr.ndim > 1:
+        arr = arr.reshape(-1)
+
+    s = pd.to_numeric(pd.Series(arr), errors="coerce")
+    return s.to_numpy(dtype=float)
+
+
+def _clean_pair(observed, modelled) -> pd.DataFrame:
+    obs = _to_1d_numeric_array(observed)
+    sim = _to_1d_numeric_array(modelled)
+
+    n = min(len(obs), len(sim))
+
     df = pd.DataFrame(
         {
-            "observed": pd.to_numeric(pd.Series(observed), errors="coerce"),
-            "modelled": pd.to_numeric(pd.Series(modelled), errors="coerce"),
+            "observed": obs[:n],
+            "modelled": sim[:n],
         }
     ).dropna()
 
@@ -41,11 +31,6 @@ def _clean_pair(observed, modelled) -> pd.DataFrame:
 
 
 def calc_r2(observed, modelled) -> float:
-    """
-    Calculate R² as squared Pearson correlation.
-
-    Returns np.nan if fewer than two valid pairs are available.
-    """
     df = _clean_pair(observed, modelled)
     if len(df) < 2:
         return np.nan
@@ -54,73 +39,63 @@ def calc_r2(observed, modelled) -> float:
     if pd.isna(corr):
         return np.nan
 
-    return float(round(corr**2, 2))
+    return float(round(float(corr) ** 2, 2))
 
 
 def calc_nse(observed, modelled) -> float:
-    """
-    Calculate Nash-Sutcliffe Efficiency (NSE).
-
-    Returns np.nan if fewer than two valid pairs are available or if the
-    observed series has zero variance.
-    """
     df = _clean_pair(observed, modelled)
     if len(df) < 2:
         return np.nan
 
-    obs = df["observed"]
-    sim = df["modelled"]
+    obs = df["observed"].to_numpy(dtype=float)
+    sim = df["modelled"].to_numpy(dtype=float)
 
-    denominator = ((obs - obs.mean()) ** 2).sum()
+    denominator = np.sum((obs - np.mean(obs)) ** 2)
     if denominator == 0:
         return np.nan
 
-    numerator = ((obs - sim) ** 2).sum()
-    return float(round(1 - numerator / denominator, 2))
+    numerator = np.sum((obs - sim) ** 2)
+    value = 1 - numerator / denominator
+
+    return float(round(float(value), 2))
 
 
 def calc_pbias(observed, modelled) -> float:
     """
-    Calculate percent bias (PBIAS).
-
-    Positive values indicate underestimation by the model on average.
-    Negative values indicate overestimation.
-
-    Returns np.nan if the observed sum is zero.
+    Moriasi convention:
+    Positive PBIAS = model overestimation.
+    Negative PBIAS = model underestimation.
     """
     df = _clean_pair(observed, modelled)
     if len(df) == 0:
         return np.nan
 
-    obs = df["observed"]
-    sim = df["modelled"]
+    obs = df["observed"].to_numpy(dtype=float)
+    sim = df["modelled"].to_numpy(dtype=float)
 
-    denominator = obs.sum()
+    denominator = np.sum(obs)
     if denominator == 0:
         return np.nan
 
-    value = 100 * ((obs - sim).sum() / denominator)
-    return float(round(value, 2))
+    value = 100.0 * np.sum(sim - obs) / denominator
+
+    return float(round(float(value), 2))
 
 
 def calc_rsr(observed, modelled) -> float:
-    """
-    Calculate RSR (RMSE-observations standard deviation ratio).
-
-    Returns np.nan if fewer than two valid pairs are available or if the
-    observed standard deviation is zero.
-    """
     df = _clean_pair(observed, modelled)
     if len(df) < 2:
         return np.nan
 
-    obs = df["observed"]
-    sim = df["modelled"]
+    obs = df["observed"].to_numpy(dtype=float)
+    sim = df["modelled"].to_numpy(dtype=float)
 
-    rmse = np.sqrt(((obs - sim) ** 2).mean())
-    obs_std = obs.std(ddof=1)
+    rmse = np.sqrt(np.mean((obs - sim) ** 2))
+    obs_std = np.std(obs, ddof=1)
 
     if pd.isna(obs_std) or obs_std == 0:
         return np.nan
 
-    return float(round(rmse / obs_std, 2))
+    value = rmse / obs_std
+
+    return float(round(float(value), 2))

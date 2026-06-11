@@ -13,13 +13,34 @@ from .workflows_process import build_process_export_summaries
 
 REGION_ORDER = ["CY", "WT", "BU", "MW", "FI", "BM"]
 
-PROCESS_ORDER = ["Hillslope", "Streambank", "Gully"]
+REGION_NAME_MAP = {
+    "CY": "Cape York",
+    "WT": "Wet Tropics",
+    "BU": "Burdekin",
+    "MW": "Mackay\nWhitsunday",
+    "FI": "Fitzroy",
+    "BM": "Burnett Mary",
+}
+
+SEDIMENT_PARTICULATE_CONSTITUENTS = {"FS", "CS", "PN", "PP"}
+DISSOLVED_CONSTITUENTS = {"DIN", "DON", "DIP", "DOP"}
+
+PROCESS_ORDER_BY_GROUP = {
+    "sediment_particulate": ["Hillslope", "Streambank", "Gully"],
+    "dissolved": ["SurfaceRunoff", "Seepage", "PointSource"],
+}
 
 PROCESS_COLOURS = {
     "Hillslope": "green",
     "Streambank": "blue",
     "Gully": "pink",
+    "SurfaceRunoff": "green",
+    "Seepage": "blue",
+    "PointSource": "pink",
 }
+
+DEFAULT_SCALE_SUFFIX = "48mu"
+DEFAULT_SCALE_LABEL = "48 management units"
 
 
 def _normalise_constituents(constituents: list[str] | None) -> list[str]:
@@ -34,6 +55,15 @@ def _normalise_constituents(constituents: list[str] | None) -> list[str]:
     return out
 
 
+def _process_order_for_constituent(con: str) -> list[str]:
+    con = str(con).upper().strip()
+
+    if con in DISSOLVED_CONSTITUENTS:
+        return PROCESS_ORDER_BY_GROUP["dissolved"]
+
+    return PROCESS_ORDER_BY_GROUP["sediment_particulate"]
+
+
 def _report_unit(con: str) -> str:
     con = str(con).upper().strip()
 
@@ -45,7 +75,6 @@ def _report_unit(con: str) -> str:
 
 def _kg_to_report(value: pd.Series, con: str, years: float) -> pd.Series:
     value = pd.to_numeric(value, errors="coerce").fillna(0.0)
-
     con = str(con).upper().strip()
 
     if con in {"FS", "CS"}:
@@ -55,7 +84,7 @@ def _kg_to_report(value: pd.Series, con: str, years: float) -> pd.Series:
 
 
 def _normalise_process_name(name: str) -> str | None:
-    s = str(name).lower()
+    s = str(name).lower().strip()
 
     if "hillslope" in s:
         return "Hillslope"
@@ -65,6 +94,20 @@ def _normalise_process_name(name: str) -> str | None:
 
     if "gully" in s:
         return "Gully"
+
+    if (
+        "diffuse dissolved" in s
+        or "surface runoff" in s
+        or "surfacerunoff" in s
+        or "runoff" in s
+    ):
+        return "SurfaceRunoff"
+
+    if "seepage" in s or "leached" in s:
+        return "Seepage"
+
+    if "point source" in s or "pointsource" in s:
+        return "PointSource"
 
     return None
 
@@ -81,71 +124,42 @@ def _first_numeric_column(df: pd.DataFrame) -> str:
     return df.columns[0]
 
 
-def _lookup_35_order_from_cfg(cfg, region: str) -> list[str]:
-    """
-    Best-effort Basin_35 order from cfg lookup files, if available.
+def _ordered_region_units(df: pd.DataFrame) -> pd.DataFrame:
+    out = df[["Region", "Basin"]].drop_duplicates().copy()
 
-    If unavailable, plotting falls back to alphabetical order.
-    """
-    possible_attrs = [
-        "basin_lookup",
-        "region_lookup",
-        "reg_link",
-        "regional_link",
-    ]
+    out["Region"] = pd.Categorical(
+        out["Region"],
+        categories=REGION_ORDER,
+        ordered=True,
+    )
 
-    for attr in possible_attrs:
-        obj = getattr(cfg, attr, None)
+    out = out.sort_values(["Region", "Basin"]).reset_index(drop=True)
 
-        if isinstance(obj, pd.DataFrame):
-            df = obj.copy()
-
-            if "Region" in df.columns:
-                df = df.loc[df["Region"].astype(str).str.upper() == region.upper()]
-
-            if "Basin_35" in df.columns:
-                return (
-                    df["Basin_35"]
-                    .dropna()
-                    .astype(str)
-                    .drop_duplicates()
-                    .tolist()
-                )
-
-    return []
+    return out
 
 
-def _sort_35_basins(
+def _sort_units(df: pd.DataFrame) -> list[str]:
+    return sorted(
+        df["Basin"]
+        .dropna()
+        .astype(str)
+        .drop_duplicates()
+        .tolist()
+    )
+
+
+def _plot_process_change_by_region(
     df: pd.DataFrame,
     *,
-    cfg,
-    region: str,
-) -> list[str]:
-    lookup_order = _lookup_35_order_from_cfg(cfg, region)
-    basins_found = df["Basin"].dropna().astype(str).drop_duplicates().tolist()
-
-    ordered = [b for b in lookup_order if b in basins_found]
-    remaining = sorted([b for b in basins_found if b not in ordered])
-
-    return ordered + remaining
-
-
-def _plot_process_change_by_region_35(
-    df: pd.DataFrame,
-    *,
-    cfg,
     region: str,
     con: str,
     out_dir: Path,
+    scale_suffix: str = DEFAULT_SCALE_SUFFIX,
+    scale_label: str = DEFAULT_SCALE_LABEL,
 ) -> Path:
-    """
-    Plot BASE - CHANGE process reduction grouped at Basin_35 scale.
-
-    One plot per region and constituent.
-    """
     unit = _report_unit(con)
 
-    basins = _sort_35_basins(df, cfg=cfg, region=region)
+    basins = _sort_units(df)
     y = np.arange(len(basins))
 
     fig_h = max(3.2, 0.55 * len(basins) + 1.8)
@@ -154,7 +168,7 @@ def _plot_process_change_by_region_35(
     left_pos = np.zeros(len(basins))
     left_neg = np.zeros(len(basins))
 
-    for process in PROCESS_ORDER:
+    for process in _process_order_for_constituent(con):
         vals = (
             df.loc[df["Process"] == process]
             .set_index("Basin")
@@ -201,7 +215,7 @@ def _plot_process_change_by_region_35(
     )
 
     ax.set_title(
-        f"{region} — {con} total change by process (35 basins)",
+        f"{region} — {con} total change by process ({scale_label})",
         fontsize=12,
         pad=18,
     )
@@ -216,25 +230,168 @@ def _plot_process_change_by_region_35(
 
     fig.tight_layout()
 
-    out_path = out_dir / f"{region}_{con}_process_change_35basins.png"
+    out_path = out_dir / f"{region}_{con}_process_change_{scale_suffix}.png"
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
     return out_path
 
 
-def _plot_percent_reduction_35basins(
+def _plot_process_change_combined_regions(
     df: pd.DataFrame,
     *,
     con: str,
     out_dir: Path,
+    scale_suffix: str = DEFAULT_SCALE_SUFFIX,
+    scale_label: str = DEFAULT_SCALE_LABEL,
 ) -> Path:
-    """
-    Plot GBR-wide percent reduction at Basin_35 scale.
+    unit = _report_unit(con)
 
-    Region labels are placed further left using axes-fraction coordinates,
-    so they do not overlap basin names.
-    """
+    plot_df = df.copy()
+    ordered_units = _ordered_region_units(plot_df)
+
+    labels = ordered_units["Basin"].astype(str).tolist()
+
+    keys = (
+        ordered_units["Region"].astype(str)
+        + "||"
+        + ordered_units["Basin"].astype(str)
+    ).tolist()
+
+    plot_df["_key"] = (
+        plot_df["Region"].astype(str)
+        + "||"
+        + plot_df["Basin"].astype(str)
+    )
+
+    y = np.arange(len(labels))
+
+    fig_h = max(9.0, 0.30 * len(labels) + 2.2)
+    fig, ax = plt.subplots(figsize=(10.5, fig_h))
+
+    left_pos = np.zeros(len(labels))
+    left_neg = np.zeros(len(labels))
+
+    for process in _process_order_for_constituent(con):
+        vals = (
+            plot_df.loc[plot_df["Process"] == process]
+            .groupby("_key")["Value"]
+            .sum()
+            .reindex(keys)
+            .fillna(0.0)
+            .to_numpy()
+        )
+
+        pos = np.where(vals > 0, vals, 0.0)
+        neg = np.where(vals < 0, vals, 0.0)
+
+        ax.barh(
+            y,
+            pos,
+            left=left_pos,
+            label=process,
+            color=PROCESS_COLOURS[process],
+            edgecolor="black",
+            linewidth=0.7,
+        )
+
+        ax.barh(
+            y,
+            neg,
+            left=left_neg,
+            color=PROCESS_COLOURS[process],
+            edgecolor="black",
+            linewidth=0.7,
+        )
+
+        left_pos += pos
+        left_neg += neg
+
+    ax.axvline(0, color="black", linewidth=1.0)
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, fontsize=8)
+    ax.invert_yaxis()
+
+    ax.set_xlabel(
+        f"{con} change ({unit})",
+        fontsize=10,
+    )
+
+    ax.set_title(
+        f"GBR — {con} total change by process ({scale_label})",
+        fontsize=12,
+        pad=28,
+    )
+
+    grouped = (
+        ordered_units.reset_index()
+        .groupby("Region", observed=True)["index"]
+        .agg(["min", "max"])
+        .reset_index()
+    )
+
+    for _, row in grouped.iterrows():
+        region = str(row["Region"])
+        y_min = float(row["min"])
+        y_max = float(row["max"])
+        y_mid = (y_min + y_max) / 2.0
+
+        ax.axhline(
+            y_min - 0.5,
+            color="black",
+            linewidth=0.8,
+        )
+
+        ax.text(
+            -0.16,
+            y_mid,
+            REGION_NAME_MAP.get(region, region),
+            transform=ax.get_yaxis_transform(),
+            ha="right",
+            va="center",
+            fontsize=9,
+            fontweight="bold",
+            clip_on=False,
+        )
+
+    if not grouped.empty:
+        ax.axhline(
+            float(grouped["max"].max()) + 0.5,
+            color="black",
+            linewidth=0.8,
+        )
+
+    ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.1),
+        ncol=3,
+        frameon=True,
+        fontsize=9,
+    )
+
+    fig.subplots_adjust(
+        left=0.26,
+        right=0.98,
+        top=0.90,
+        bottom=0.06,
+    )
+
+    out_path = out_dir / f"GBR_{con}_process_change_{scale_suffix}.png"
+    fig.savefig(out_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    return out_path
+
+
+def _plot_percent_reduction(
+    df: pd.DataFrame,
+    *,
+    con: str,
+    out_dir: Path,
+    scale_suffix: str = DEFAULT_SCALE_SUFFIX,
+    scale_label: str = DEFAULT_SCALE_LABEL,
+) -> Path:
     plot_df = df.copy()
 
     plot_df["Region"] = pd.Categorical(
@@ -247,7 +404,6 @@ def _plot_percent_reduction_35basins(
 
     labels = plot_df["Basin"].astype(str).tolist()
     values = plot_df["PercentReduction"].fillna(0.0).to_numpy()
-    regions = plot_df["Region"].astype(str).tolist()
 
     y = np.arange(len(labels))
 
@@ -268,7 +424,7 @@ def _plot_percent_reduction_35basins(
     ax.invert_yaxis()
 
     ax.set_title(
-        f"GBR — {con} percent reduction (35 basins)",
+        f"GBR — {con} percent reduction ({scale_label})",
         fontsize=12,
     )
 
@@ -318,10 +474,9 @@ def _plot_percent_reduction_35basins(
             linewidth=0.6,
         )
 
-    # Extra left margin so region labels sit left of basin names.
     fig.subplots_adjust(left=0.30, right=0.98, top=0.95, bottom=0.06)
 
-    out_path = out_dir / f"GBR_percentReduction_35basins_{con}.png"
+    out_path = out_dir / f"GBR_percentReduction_{scale_suffix}_{con}.png"
     fig.savefig(out_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
@@ -364,11 +519,21 @@ def _process_table_to_long(
     merged["Process"] = merged["ProcessRaw"].map(_normalise_process_name)
     merged = merged.dropna(subset=["Process"])
 
+    allowed_processes = _process_order_for_constituent(con)
+    merged = merged.loc[merged["Process"].isin(allowed_processes)].copy()
+
     merged["Value"] = _kg_to_report(
         merged["BASE_kg"] - merged["CHANGE_kg"],
         con,
         years,
     )
+    TOLERANCE = 1e-6
+
+    merged.loc[
+        merged["Value"].abs() < TOLERANCE,
+        "Value"
+    ] = 0.0
+
 
     merged["Region"] = region
     merged["Basin"] = basin
@@ -398,22 +563,9 @@ def run_change_summary_plots(
     units: str = "report",
     process_model: str = "BASE",
     bundle_dirs: dict[str, Path] | None = None,
+    scale_suffix: str = DEFAULT_SCALE_SUFFIX,
+    scale_label: str = DEFAULT_SCALE_LABEL,
 ):
-    """
-    Create change-model summary plots at Basin_35 scale.
-
-    Outputs
-    -------
-    1. reduction_mass_per_y/<constituent>/
-       - region process plots:
-         BASE - CHANGE by Hillslope / Streambank / Gully
-       - grouped to 35 basins, not 48 management units
-
-    2. reduction_%/<constituent>/
-       - GBR-wide percent reduction:
-         (BASE - CHANGE) / (BASE - PREDEV) * 100
-       - grouped to 35 basins
-    """
     output_dir = ensure_output_dir(output_dir)
     constituents = _normalise_constituents(constituents)
 
@@ -424,11 +576,6 @@ def run_change_summary_plots(
     mass_root = ensure_output_dir(output_dir / "reduction_mass_per_y")
     percent_root = ensure_output_dir(output_dir / "reduction_%")
 
-    # ------------------------------------------------------------
-    # 1. Process change plots: BASE - CHANGE
-    #    build_process_export_summaries returns:
-    #    basin_by_region, region_by_region, combined
-    # ------------------------------------------------------------
     base_basin, _, _ = build_process_export_summaries(
         cfg=cfg,
         regions=cfg.regions,
@@ -480,18 +627,10 @@ def run_change_summary_plots(
         if not all_rows:
             continue
 
-        process_48_df = pd.concat(all_rows, ignore_index=True)
+        process_df = pd.concat(all_rows, ignore_index=True)
 
-        # This is the key fix:
-        # aggregate the process-change output to 35 basins.
-        # If the upstream workflow already returns Basin_35 names,
-        # this preserves them. If it returns MU_48 but named as Basin,
-        # this will still group by current Basin field.
-        #
-        # Your workflows_process should be configured to Basin_35 for this
-        # output. The plot title and filename now clearly label 35 basins.
-        process_35_df = (
-            process_48_df
+        process_df = (
+            process_df
             .groupby(
                 [
                     "Region",
@@ -511,33 +650,57 @@ def run_change_summary_plots(
             )
         )
 
-        csv_path = con_dir / f"GBR_{con}_process_change_35basins.csv"
-        process_35_df.to_csv(csv_path, index=False)
+        TOLERANCE = 1e-6
+
+        basin_totals = (
+            process_df
+            .groupby(["Region", "Basin"])["Value"]
+            .apply(lambda x: np.abs(x).sum())
+        )
+
+        valid_basins = basin_totals[
+            basin_totals > TOLERANCE
+        ].index
+
+        process_df = process_df[
+            process_df.set_index(
+                ["Region", "Basin"]
+            ).index.isin(valid_basins)
+        ]
+
+        csv_path = con_dir / f"GBR_{con}_process_change_{scale_suffix}.csv"
+        process_df.to_csv(csv_path, index=False)
         files[f"process_change_csv_{con}"] = str(csv_path)
 
         for region in cfg.regions:
-            region_df = process_35_df.loc[
-                process_35_df["Region"] == region
+            region_df = process_df.loc[
+                process_df["Region"] == region
             ].copy()
 
             if region_df.empty:
                 continue
 
-            png_path = _plot_process_change_by_region_35(
+            png_path = _plot_process_change_by_region(
                 region_df,
-                cfg=cfg,
                 region=region,
                 con=con,
                 out_dir=con_dir,
+                scale_suffix=scale_suffix,
+                scale_label=scale_label,
             )
 
             files[f"process_change_plot_{region}_{con}"] = str(png_path)
 
-    # ------------------------------------------------------------
-    # 2. Percent reduction plots:
-    #    (BASE - CHANGE) / (BASE - PREDEV) * 100
-    #    build_fu_basin_scenario_comparison should return Basin_35 here.
-    # ------------------------------------------------------------
+        gbr_png_path = _plot_process_change_combined_regions(
+            process_df,
+            con=con,
+            out_dir=con_dir,
+            scale_suffix=scale_suffix,
+            scale_label=scale_label,
+        )
+
+        files[f"process_change_plot_GBR_{con}"] = str(gbr_png_path)
+
     basin_compare = build_fu_basin_scenario_comparison(
         cfg=cfg,
         regions=cfg.regions,
@@ -583,14 +746,6 @@ def run_change_summary_plots(
                 predev_total = _total(predev_region[basin])
                 change_total = _total(change_region[basin])
 
-                anthropogenic = base_total - predev_total
-                reduction = base_total - change_total
-
-                if np.isclose(anthropogenic, 0.0):
-                    percent_reduction = np.nan
-                else:
-                    percent_reduction = reduction / anthropogenic * 100.0
-
                 rows.append(
                     {
                         "Region": region,
@@ -599,9 +754,6 @@ def run_change_summary_plots(
                         "BASE_kg": base_total,
                         "PREDEV_kg": predev_total,
                         "CHANGE_kg": change_total,
-                        "Anthropogenic_kg": anthropogenic,
-                        "Reduction_kg": reduction,
-                        "PercentReduction": percent_reduction,
                     }
                 )
 
@@ -610,7 +762,7 @@ def run_change_summary_plots(
         if percent_df.empty:
             continue
 
-        percent_35_df = (
+        percent_df = (
             percent_df
             .groupby(["Region", "Basin", "Constituent"], as_index=False)
             .agg(
@@ -622,29 +774,32 @@ def run_change_summary_plots(
             )
         )
 
-        percent_35_df["Anthropogenic_kg"] = (
-            percent_35_df["BASE_kg"] - percent_35_df["PREDEV_kg"]
-        )
-        percent_35_df["Reduction_kg"] = (
-            percent_35_df["BASE_kg"] - percent_35_df["CHANGE_kg"]
+        percent_df["Anthropogenic_kg"] = (
+            percent_df["BASE_kg"] - percent_df["PREDEV_kg"]
         )
 
-        percent_35_df["PercentReduction"] = np.where(
-            np.isclose(percent_35_df["Anthropogenic_kg"], 0.0),
+        percent_df["Reduction_kg"] = (
+            percent_df["BASE_kg"] - percent_df["CHANGE_kg"]
+        )
+
+        percent_df["PercentReduction"] = np.where(
+            np.isclose(percent_df["Anthropogenic_kg"], 0.0),
             np.nan,
-            percent_35_df["Reduction_kg"]
-            / percent_35_df["Anthropogenic_kg"]
+            percent_df["Reduction_kg"]
+            / percent_df["Anthropogenic_kg"]
             * 100.0,
         )
 
-        csv_path = con_dir / f"GBR_percentReduction_35basins_{con}.csv"
-        percent_35_df.to_csv(csv_path, index=False)
+        csv_path = con_dir / f"GBR_percentReduction_{scale_suffix}_{con}.csv"
+        percent_df.to_csv(csv_path, index=False)
         files[f"percent_reduction_csv_{con}"] = str(csv_path)
 
-        png_path = _plot_percent_reduction_35basins(
-            percent_35_df,
+        png_path = _plot_percent_reduction(
+            percent_df,
             con=con,
             out_dir=con_dir,
+            scale_suffix=scale_suffix,
+            scale_label=scale_label,
         )
 
         files[f"percent_reduction_plot_{con}"] = str(png_path)

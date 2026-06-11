@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Callable, Any
 import inspect
 import traceback
+import time
 
 import pandas as pd
 
@@ -32,6 +33,7 @@ from .workflows_process import build_process_export_summaries
 from .plot_process_contribution import plot_process_contribution_exports
 from .fu_load_summary import run_fu_load_summary
 from .report_subcatchment_summary import run_subcatchment_summary
+from .rsdr_shapefile import export_rsdr_shapefiles
 
 
 FU_SCENARIO_KEYS = {
@@ -84,6 +86,8 @@ DEFAULT_BUNDLE_SUBDIRS = {
     "fu_load_summary": "08_fu_load_summary",
     "process_contribution_plots": "09_process_contribution_plots",
     "change_summary_plots": "10_change_summary_plots",
+    "modelled_vs_measured": "11_modelled_vs_measured",
+    "rsdr_shapefiles": "12_rsdr_shapefiles",
     "other": "90_other",
 }
 
@@ -103,6 +107,8 @@ FILE_DESCRIPTIONS = {
     "bundle_metadata_csv": "Top-level metadata for the bundle run.",
     "bundle_step_summary_csv": "Step-by-step output index with one output file per row.",
     "bundle_readme_txt": "Human-readable overview of the bundle structure and outputs.",
+    "rsdr_output_index_csv": "Index of RSDR CSV and shapefile outputs created by the bundle.",
+    "rsdr_combined_csv": "Combined RSDR table across all exported constituents and filtered subcatchments.",
     "region_output_csv": "Region summary outputs from an external workflow.",
     "basin_output_csv": "Basin summary outputs from an external workflow.",
     "basin_compare_ready_csv": "Basin-level scenario totals ready for comparison calculations.",
@@ -152,6 +158,78 @@ class StepResult:
     message: str = ""
 
 
+def _fmt_elapsed(seconds: float | None) -> str:
+    if seconds is None:
+        return "NA"
+
+    if seconds < 60:
+        return f"{seconds:.1f}s"
+
+    minutes = int(seconds // 60)
+    rem = seconds % 60
+
+    if minutes < 60:
+        return f"{minutes}m {rem:.1f}s"
+
+    hours = int(minutes // 60)
+    minutes = minutes % 60
+    return f"{hours}h {minutes}m {rem:.1f}s"
+
+
+def _print_step_plan(planned_steps: list[str]) -> None:
+    print("")
+    print("=" * 80)
+    print("REPORT-CARD BUNDLE STEP ORDER")
+    print("=" * 80)
+
+    for i, name in enumerate(planned_steps, start=1):
+        print(f"[{i:02d}/{len(planned_steps):02d}] {name}")
+
+    print("=" * 80)
+
+
+def _print_step_start(step_no: int, total_steps: int, name: str) -> float:
+    print("")
+    print("=" * 80)
+    print(f"[{step_no:02d}/{total_steps:02d}] START: {name}")
+    print("=" * 80)
+    return time.perf_counter()
+
+
+def _print_step_end(name: str, start_time: float, *, status: str = "SUCCESS") -> float:
+    elapsed = time.perf_counter() - start_time
+
+    print("-" * 80)
+    print(f"{status}: {name} | elapsed: {_fmt_elapsed(elapsed)}")
+    print("-" * 80)
+
+    return elapsed
+
+
+def _print_step_timing_summary(timing_rows: list[dict[str, object]]) -> None:
+    if not timing_rows:
+        return
+
+    print("")
+    print("=" * 80)
+    print("REPORT-CARD BUNDLE STEP TIMING SUMMARY")
+    print("=" * 80)
+
+    for row in timing_rows:
+        print(
+            f"[{int(row['StepNo']):02d}/{int(row['TotalSteps']):02d}] "
+            f"{row['Step']:<32} "
+            f"{row['Status']:<8} "
+            f"{_fmt_elapsed(float(row['ElapsedSeconds']))}"
+        )
+
+    total_seconds = sum(float(row["ElapsedSeconds"]) for row in timing_rows)
+
+    print("-" * 80)
+    print(f"TOTAL ELAPSED: {_fmt_elapsed(total_seconds)}")
+    print("=" * 80)
+
+
 def _normalise_constituents_no_tss(
     constituents: list[str] | None,
 ) -> list[str] | None:
@@ -197,6 +275,18 @@ def _file_description(file_key: str | None) -> str:
 
     if key.startswith("percent_reduction_plot_"):
         return "Percent reduction plot by Basin_35."
+
+    if key.startswith("rsdr_csv_") or "_rsdr_csv_" in key:
+        return "RSDR values joined to subcatchments for one constituent as CSV."
+
+    if key.startswith("rsdr_shp_") or "_rsdr_shp_" in key:
+        return "RSDR values joined to subcatchments for one constituent as shapefile."
+
+    if key.startswith("modelled_vs_measured_"):
+        return (
+            "Modelled versus monitored comparison output "
+            "(annual comparison, average annual summary, ratio plot, or Moriasi statistics)."
+        )
 
     return "No description available."
 
@@ -937,7 +1027,9 @@ def _write_bundle_readme(
     lines.append("3. In flattened summary tables, Units shows actual units such as kt/yr or t/yr.")
     lines.append("4. Process contribution plots are written to 09_process_contribution_plots.")
     lines.append("5. Change summary plots are written to 10_change_summary_plots.")
-    lines.append("6. Fine sediment is FS. TSS is not used.")
+    lines.append("6. Modelled-vs-measured outputs are written to 11_modelled_vs_measured.")
+    lines.append("7. RSDR CSV and shapefile outputs are written to 12_rsdr_shapefiles.")
+    lines.append("8. Fine sediment is FS. TSS is not used.")
     lines.append("")
 
     output_path.write_text("\n".join(lines), encoding="utf-8")
@@ -1178,6 +1270,7 @@ def run_report_card_bundle(
     fail_fast: bool = False,
     make_process_contribution_plots: bool = True,
     make_subcatchment_summary: bool = True,
+    make_rsdr_outputs: bool = True,
 ) -> dict[str, object]:
     constituents = _normalise_constituents_no_tss(constituents)
 
@@ -1190,6 +1283,7 @@ def run_report_card_bundle(
 
     step_results: list[StepResult] = []
     outputs: dict[str, object] = {}
+    timing_rows: list[dict[str, object]] = []
 
     bundle_meta = _build_metadata_table(
         cfg=cfg,
@@ -1203,7 +1297,40 @@ def run_report_card_bundle(
     bundle_meta_path = bundle_dirs["metadata"] / "bundle_metadata.csv"
     bundle_meta.to_csv(bundle_meta_path, index=False)
 
+    planned_steps: list[str] = ["report_card_summary"]
+
+    if make_subcatchment_summary:
+        planned_steps.append("subcatchment_summary")
+
+    if make_rsdr_outputs:
+        planned_steps.append("rsdr_shapefiles")
+
+    if make_process_contribution_plots:
+        planned_steps.append("process_contribution_plots")
+
+    planned_steps.extend(list((extra_steps or {}).keys()))
+
+    total_steps = len(planned_steps)
+    step_no = 0
+
+    _print_step_plan(planned_steps)
+
+    current_step_name = "report_card_summary"
+    current_step_dir = bundle_dirs["report_card_summary"]
+    current_step_start: float | None = None
+    current_step_no = 0
+
     try:
+        step_no += 1
+        current_step_no = step_no
+        current_step_name = "report_card_summary"
+        current_step_dir = bundle_dirs["report_card_summary"]
+        current_step_start = _print_step_start(
+            step_no,
+            total_steps,
+            current_step_name,
+        )
+
         core = run_report_card_summary(
             cfg=cfg,
             output_dir=bundle_dirs["report_card_summary"],
@@ -1214,6 +1341,22 @@ def run_report_card_bundle(
             export_excel_workbook=export_excel_workbook,
         )
 
+        elapsed = _print_step_end(
+            current_step_name,
+            current_step_start,
+            status="SUCCESS",
+        )
+
+        timing_rows.append(
+            {
+                "StepNo": current_step_no,
+                "TotalSteps": total_steps,
+                "Step": current_step_name,
+                "Status": "SUCCESS",
+                "ElapsedSeconds": elapsed,
+            }
+        )
+
         outputs["report_card_summary"] = core
 
         step_results.append(
@@ -1222,11 +1365,24 @@ def run_report_card_bundle(
                 status="SUCCESS",
                 output_dir=bundle_dirs["report_card_summary"],
                 files={k: str(v) for k, v in core.get("files", {}).items()},
-                message="Core FU + process report-card summary completed.",
+                message=(
+                    "Core FU + process report-card summary completed "
+                    f"in {_fmt_elapsed(elapsed)}."
+                ),
             )
         )
 
         if make_subcatchment_summary:
+            step_no += 1
+            current_step_no = step_no
+            current_step_name = "subcatchment_summary"
+            current_step_dir = bundle_dirs["subcatchment_summary"]
+            current_step_start = _print_step_start(
+                step_no,
+                total_steps,
+                current_step_name,
+            )
+
             subcatchment = run_subcatchment_summary(
                 cfg=cfg,
                 output_dir=bundle_dirs["subcatchment_summary"],
@@ -1237,6 +1393,22 @@ def run_report_card_bundle(
                 export_excel_workbook=export_excel_workbook,
             )
 
+            elapsed = _print_step_end(
+                current_step_name,
+                current_step_start,
+                status="SUCCESS",
+            )
+
+            timing_rows.append(
+                {
+                    "StepNo": current_step_no,
+                    "TotalSteps": total_steps,
+                    "Step": current_step_name,
+                    "Status": "SUCCESS",
+                    "ElapsedSeconds": elapsed,
+                }
+            )
+
             outputs["subcatchment_summary"] = subcatchment
 
             step_results.append(
@@ -1245,11 +1417,76 @@ def run_report_card_bundle(
                     status="SUCCESS",
                     output_dir=bundle_dirs["subcatchment_summary"],
                     files={k: str(v) for k, v in subcatchment.get("files", {}).items()},
-                    message="Subcatchment FU-aggregated report-card summary completed.",
+                    message=(
+                        "Subcatchment FU-aggregated report-card summary completed "
+                        f"in {_fmt_elapsed(elapsed)}."
+                    ),
+                )
+            )
+
+        if make_rsdr_outputs:
+            step_no += 1
+            current_step_no = step_no
+            current_step_name = "rsdr_shapefiles"
+            current_step_dir = bundle_dirs["rsdr_shapefiles"]
+            current_step_start = _print_step_start(
+                step_no,
+                total_steps,
+                current_step_name,
+            )
+
+            rsdr_result = export_rsdr_shapefiles(
+                cfg=cfg,
+                output_dir=bundle_dirs["rsdr_shapefiles"],
+                process_model=process_model,
+                constituents=constituents,
+            )
+
+            elapsed = _print_step_end(
+                current_step_name,
+                current_step_start,
+                status="SUCCESS",
+            )
+
+            timing_rows.append(
+                {
+                    "StepNo": current_step_no,
+                    "TotalSteps": total_steps,
+                    "Step": current_step_name,
+                    "Status": "SUCCESS",
+                    "ElapsedSeconds": elapsed,
+                }
+            )
+
+            outputs["rsdr_shapefiles"] = rsdr_result
+
+            step_results.append(
+                StepResult(
+                    name="rsdr_shapefiles",
+                    status="SUCCESS",
+                    output_dir=bundle_dirs["rsdr_shapefiles"],
+                    files={
+                        k: str(v)
+                        for k, v in rsdr_result.get("files", {}).items()
+                    },
+                    message=(
+                        "RSDR shapefile and CSV export completed "
+                        f"in {_fmt_elapsed(elapsed)}."
+                    ),
                 )
             )
 
         if make_process_contribution_plots:
+            step_no += 1
+            current_step_no = step_no
+            current_step_name = "process_contribution_plots"
+            current_step_dir = bundle_dirs["process_contribution_plots"]
+            current_step_start = _print_step_start(
+                step_no,
+                total_steps,
+                current_step_name,
+            )
+
             basin_by_region = core["process_result"]["basin_by_region"]
 
             process_plot_files = plot_process_contribution_exports(
@@ -1260,6 +1497,22 @@ def run_report_card_bundle(
                 value_column=value_column,
             )
 
+            elapsed = _print_step_end(
+                current_step_name,
+                current_step_start,
+                status="SUCCESS",
+            )
+
+            timing_rows.append(
+                {
+                    "StepNo": current_step_no,
+                    "TotalSteps": total_steps,
+                    "Step": current_step_name,
+                    "Status": "SUCCESS",
+                    "ElapsedSeconds": elapsed,
+                }
+            )
+
             outputs["process_contribution_plots"] = process_plot_files
 
             step_results.append(
@@ -1268,18 +1521,44 @@ def run_report_card_bundle(
                     status="SUCCESS",
                     output_dir=bundle_dirs["process_contribution_plots"],
                     files={k: str(v) for k, v in process_plot_files.items()},
-                    message="Process contribution plots completed.",
+                    message=(
+                        "Process contribution plots completed "
+                        f"in {_fmt_elapsed(elapsed)}."
+                    ),
                 )
             )
 
     except Exception as exc:
+        elapsed = (
+            _print_step_end(
+                current_step_name,
+                current_step_start,
+                status="FAILED",
+            )
+            if current_step_start is not None
+            else 0.0
+        )
+
+        timing_rows.append(
+            {
+                "StepNo": current_step_no or step_no,
+                "TotalSteps": total_steps,
+                "Step": current_step_name,
+                "Status": "FAILED",
+                "ElapsedSeconds": elapsed,
+            }
+        )
+
         step_results.append(
             StepResult(
-                name="report_card_summary",
+                name=current_step_name,
                 status="FAILED",
-                output_dir=bundle_dirs["report_card_summary"],
+                output_dir=current_step_dir,
                 files={},
-                message=f"{exc}\n\n{traceback.format_exc()}",
+                message=(
+                    f"Failed after {_fmt_elapsed(elapsed)}. "
+                    f"{exc}\n\n{traceback.format_exc()}"
+                ),
             )
         )
 
@@ -1297,12 +1576,24 @@ def run_report_card_bundle(
                 step_summary_df=step_summary_df,
             )
 
+            _print_step_timing_summary(timing_rows)
+
             raise
 
     for step_name, step_fn in (extra_steps or {}).items():
         step_dir = bundle_dirs.get(
             step_name,
             ensure_output_dir(bundle_dirs["other"] / step_name),
+        )
+
+        step_no += 1
+        current_step_name = step_name
+        current_step_dir = step_dir
+        current_step_no = step_no
+        current_step_start = _print_step_start(
+            step_no,
+            total_steps,
+            step_name,
         )
 
         try:
@@ -1347,6 +1638,41 @@ def run_report_card_bundle(
                 if isinstance(raw_files, dict):
                     files = {k: str(v) for k, v in raw_files.items()}
 
+            # Some workflows, including modelled_vs_measured, may write files
+            # directly to their output directory without returning a files dict.
+            # Scan the step folder so bundle_step_summary.csv still indexes
+            # every output file produced by the step.
+            if not files and step_dir.exists():
+                for path in sorted(step_dir.rglob("*")):
+                    if path.is_file():
+                        rel = path.relative_to(step_dir)
+                        file_key = (
+                            step_name
+                            + "_"
+                            + str(rel)
+                            .replace("\\", "_")
+                            .replace("/", "_")
+                            .replace(" ", "_")
+                            .replace(".", "_")
+                        )
+                        files[file_key] = str(path)
+
+            elapsed = _print_step_end(
+                step_name,
+                current_step_start,
+                status="SUCCESS",
+            )
+
+            timing_rows.append(
+                {
+                    "StepNo": current_step_no,
+                    "TotalSteps": total_steps,
+                    "Step": step_name,
+                    "Status": "SUCCESS",
+                    "ElapsedSeconds": elapsed,
+                }
+            )
+
             outputs[step_name] = result
 
             step_results.append(
@@ -1355,18 +1681,34 @@ def run_report_card_bundle(
                     status="SUCCESS",
                     output_dir=step_dir,
                     files=files,
-                    message="Completed.",
+                    message=f"Completed in {_fmt_elapsed(elapsed)}.",
                 )
             )
 
         except NotImplementedError as exc:
+            elapsed = _print_step_end(
+                step_name,
+                current_step_start,
+                status="SKIPPED",
+            )
+
+            timing_rows.append(
+                {
+                    "StepNo": current_step_no,
+                    "TotalSteps": total_steps,
+                    "Step": step_name,
+                    "Status": "SKIPPED",
+                    "ElapsedSeconds": elapsed,
+                }
+            )
+
             step_results.append(
                 StepResult(
                     name=step_name,
                     status="SKIPPED",
                     output_dir=step_dir,
                     files={},
-                    message=str(exc),
+                    message=f"Skipped after {_fmt_elapsed(elapsed)}. {exc}",
                 )
             )
 
@@ -1384,16 +1726,37 @@ def run_report_card_bundle(
                     step_summary_df=step_summary_df,
                 )
 
+                _print_step_timing_summary(timing_rows)
+
                 raise
 
         except Exception as exc:
+            elapsed = _print_step_end(
+                step_name,
+                current_step_start,
+                status="FAILED",
+            )
+
+            timing_rows.append(
+                {
+                    "StepNo": current_step_no,
+                    "TotalSteps": total_steps,
+                    "Step": step_name,
+                    "Status": "FAILED",
+                    "ElapsedSeconds": elapsed,
+                }
+            )
+
             step_results.append(
                 StepResult(
                     name=step_name,
                     status="FAILED",
                     output_dir=step_dir,
                     files={},
-                    message=f"{exc}\n\n{traceback.format_exc()}",
+                    message=(
+                        f"Failed after {_fmt_elapsed(elapsed)}. "
+                        f"{exc}\n\n{traceback.format_exc()}"
+                    ),
                 )
             )
 
@@ -1411,7 +1774,11 @@ def run_report_card_bundle(
                     step_summary_df=step_summary_df,
                 )
 
+                _print_step_timing_summary(timing_rows)
+
                 raise
+
+    _print_step_timing_summary(timing_rows)
 
     step_summary_path = bundle_dirs["metadata"] / "bundle_step_summary.csv"
     step_summary_df = _write_step_summary(step_results, step_summary_path)

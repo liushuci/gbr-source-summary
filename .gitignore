@@ -18,3 +18,5 @@ src/gbr_source_summary/data/spatial/GBR_Regions_Subcats_P4_v4/
 src/gbr_source_summary/data/spatial/GBR_Regions_Subcats_P4_v4/
 
 src/gbr_source_summary/data/spatial/GBR_Regions_Subcats_P4_v4.gpkg
+check_outputs/ 
+outputs/ 

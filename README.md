@@ -1,32 +1,36 @@
 # GBR Source Summary
 
-A Python package for generating Great Barrier Reef (GBR) catchment modelling summaries, report card outputs, source–sink analysis, and Sankey visualisations from eWater Source / OpenWater model outputs.
+A Python package for generating Great Barrier Reef (GBR) catchment modelling summaries, report card outputs, source–sink analysis, model performance assessment, RSDR exports, and Sankey visualisations from eWater Source / OpenWater model outputs.
 
-This package consolidates many of the workflows traditionally implemented in large analysis notebooks into reusable, configurable Python scripts and modules.
+This package consolidates many workflows traditionally implemented in large analysis notebooks into reusable, configurable Python scripts and modules suitable for operational Reef Report Card production.
 
 ---
 
-## Features
+# Features
 
-### Reporting Workflows
+## Reporting Workflows
 
+The package supports automated generation of:
+
+* Report card summaries
+* Region summaries
+* Basin summaries
+* Subcatchment summaries
+* Land-use summaries
+* Source–sink summaries
+* Source–sink Sankey diagrams
 * Functional Unit (FU) load summaries
-* Process-based summaries
-* Basin and regional summaries
-* Source–sink analysis
-* Sankey diagram generation
-* Report card bundle generation
-* Land use and rainfall summaries
-* Anthropogenic load calculations
-* Scenario comparisons:
-
-  * PREDEV
-  * BASE
-  * CHANGE
+* Process contribution summaries
+* Change summary plots
+* Modelled vs measured assessments
+* Moriasi performance statistics
+* RSDR shapefile and CSV exports
+* Excel workbooks
+* Metadata tables
 
 ---
 
-## Supported Constituents
+# Supported Constituents
 
 | Constituent | Description                    |
 | ----------- | ------------------------------ |
@@ -41,9 +45,9 @@ This package consolidates many of the workflows traditionally implemented in lar
 
 ---
 
-## Main Capabilities
+# Main Capabilities
 
-### Functional Unit Summaries
+## Functional Unit Summaries
 
 Generate:
 
@@ -52,28 +56,37 @@ Generate:
 * Regional summaries
 * GBR-wide summaries
 * Plot-ready tables
+* Scenario comparisons
 
 ---
 
-### Process-Based Reporting
+## Process-Based Reporting
 
 Summarise contributions from:
+
+### Sediment and Particulate Pathways
 
 * Hillslope
 * Gully
 * Streambank
-* Point source
+
+### Dissolved Pathways
+
 * Surface runoff
 * Seepage
+* Point source
+
+### Internal Processes
+
 * Floodplain deposition
 * Reservoir deposition
-* Channel remobilisation
 * Stream deposition
 * Extraction losses
+* Channel remobilisation
 
 ---
 
-### Source–Sink Analysis
+## Source–Sink Analysis
 
 Generate source-to-export summaries for:
 
@@ -84,42 +97,124 @@ Generate source-to-export summaries for:
 
 Including:
 
-* Export pathways
-* Internal losses
-* Retention
+* Generated load
+* Delivered load
+* Export load
+* Internal retention
 * Delivery ratios
+* Source contributions
+* Process contributions
 
 ---
 
-### Sankey Visualisations
+## Sankey Visualisations
 
 Automatic Sankey generation for:
 
-* All regions
-* All basins
+* GBR
+* Regions
+* Basins
 * Multiple constituents
 
 Including:
 
-* Source → transport → export pathways
-* Automated unit handling
+```text
+Source → Delivery → Retention → Export
+```
+
+Features:
+
 * Consistent report-card formatting
+* Automatic unit conversion
+* Automated scaling
+* Batch generation
 
 ---
 
-### Report Card Bundle
+## Change Summary Plots
 
-Single-command workflow that generates:
+Generate:
 
-* Regional summaries
-* Basin summaries
-* FU summaries
-* Process summaries
-* Source–sink summaries
-* Sankey diagrams
-* Excel workbooks
-* CSV exports
-* Metadata tables
+* Percent reduction plots
+* Process-change plots
+* Region-level plots
+* GBR-wide plots
+
+Supporting:
+
+```text
+BASE
+PREDEV
+CHANGE
+```
+
+scenario comparisons.
+
+---
+
+## Modelled vs Measured Assessment
+
+Generate:
+
+* Daily comparisons
+* Annual comparisons
+* Moriasi statistics
+* Site-level summaries
+* Performance rating tables
+* Diagnostic plots
+
+Supporting:
+
+* Flow
+* Fine Sediment
+* DIN
+* TN
+* TP
+
+Implemented in:
+
+```text
+modelled_vs_measured.py
+metrics.py
+moriasi_ratings.py
+```
+
+---
+
+## Moriasi Performance Metrics
+
+Supported statistics:
+
+| Metric | Description                                |
+| ------ | ------------------------------------------ |
+| R²     | Coefficient of Determination               |
+| NSE    | Nash-Sutcliffe Efficiency                  |
+| PBIAS  | Percent Bias                               |
+| RSR    | RMSE-observations standard deviation ratio |
+
+Automatic performance ratings are generated using published Moriasi criteria.
+
+---
+
+## RSDR Export Workflow
+
+Generate:
+
+* CSV outputs
+* ESRI Shapefiles
+* GeoPackages
+
+Outputs include:
+
+* Region-level RSDR
+* GBR-level RSDR
+* Spatial RSDR products
+
+Implemented in:
+
+```text
+rsdr_shapefile.py
+```
 
 ---
 
@@ -178,53 +273,257 @@ gbr_source_summary/
 │
 ├── src/gbr_source_summary/
 │   ├── config.py
-│   ├── units.py
-│   ├── export.py
-│   ├── export_excel.py
+│   ├── io.py
+│   ├── package_data.py
+│   ├── metrics.py
+│   ├── moriasi_ratings.py
+│   ├── modelled_vs_measured.py
+│   ├── rsdr_shapefile.py
 │   ├── report_card_summary.py
-│   ├── report_fu.py
-│   ├── report_process.py
 │   ├── workflows_basin.py
-│   ├── workflows_fu.py
 │   ├── workflows_process.py
 │   ├── workflows_source_sink.py
+│   ├── workflows_change_summary_plots.py
 │   └── ...
+│
+├── data/
 │
 └── README.md
 ```
 
 ---
 
-# Typical Input Structure
+# Packaged Reference Data
 
-The package expects standard GBR Source/OpenWater outputs, typically organised as:
+The package includes commonly used GBR reporting datasets.
+
+## Monitoring Data
 
 ```text
-Gold_ResultsSets_PointOfTruth/
-    CY/
-        Model_Outputs/
-            BASE_Gold_93_23/
-            PREDEV_Gold_93_23/
-            CHANGE_Gold_93_23/
+src/gbr_source_summary/data/monitoring_data/
+└── flowsLoadsGBRCLMP_GBR_allSites_MASTER.csv
 ```
+
+Used for:
+
+* Modelled vs measured workflows
+* Moriasi assessments
+
+---
+
+## Region Lookup Tables
+
+```text
+src/gbr_source_summary/data/region_lookup/
+```
+
+Includes:
+
+```text
+BM_Subcat_Regions_LUT.csv
+BU_Subcat_Regions_LUT.csv
+CY_Subcat_Regions_LUT.csv
+FI_Subcat_Regions_LUT.csv
+MW_Subcat_Regions_LUT.csv
+WT_Subcat_Regions_LUT.csv
+```
+
+and:
+
+```text
+BM_Reg_cat_node_link.csv
+BU_Reg_cat_node_link.csv
+CY_Reg_cat_node_link.csv
+FI_Reg_cat_node_link.csv
+MW_Reg_cat_node_link.csv
+WT_Reg_cat_node_link.csv
+```
+
+---
+
+## Regional Spatial Layers
+
+Subcatchment spatial layers are packaged by region:
+
+```text
+src/gbr_source_summary/data/spatial/regions_shp/
+├── BM/
+├── BU/
+├── CY/
+├── FI/
+├── MW/
+└── WT/
+```
+
+This avoids GitHub file-size limitations associated with a single GBR-wide shapefile.
+
+---
+
+# Typical Input Structure
+
+The package expects standard GBR Source/OpenWater outputs:
+
+```text
+RC13_RC2023_24_Gold/
+└── Gold_ResultsSets_PointOfTruth/
+    ├── CY/
+    ├── WT/
+    ├── BU/
+    ├── MW/
+    ├── FI/
+    └── BM/
+        └── Model_Outputs/
+            ├── BASE_Gold_93_23/
+            ├── PREDEV_Gold_93_23/
+            └── CHANGE_Gold_93_23/
+```
+
+---
+
+# Supported Reporting Scales
+
+| Scale              | Column        |
+| ------------------ | ------------- |
+| 35                 | Basin_35      |
+| Basin_35           | Basin_35      |
+| 48                 | Manag_Unit_48 |
+| MU_48              | Manag_Unit_48 |
+| management_unit_48 | Manag_Unit_48 |
+| WQI                | WQI_Cal       |
 
 ---
 
 # Example Usage
 
-## Run Full Report Card Bundle
+## Full Report Card Bundle
+
+Generate all report card products:
 
 ```bash
 python scripts/run_report_card_summary.py ^
-    --main-path F:\RC13_RC2023_24_Gold ^
-    --output-root F:\RC13_RC2023_24_Gold\report_card_bundle ^
-    --regions CY,WT,BU,MW,FI,BM ^
-    --units report
+  --main-path F:\RC13_RC2023_24_Gold ^
+  --model-results-prefix Gold_ResultsSets_PointOfTruth ^
+  --output-root F:\RC13_RC2023_24_Gold\report_card_bundle ^
+  --regions CY,WT,BU,MW,FI,BM ^
+  --constituents FS,PN,PP,DIN,DON,DIP,DOP ^
+  --units report ^
+  --process-model BASE
+```
+
+### Arguments
+
+| Argument                 | Description                                                      |
+| ------------------------ | ---------------------------------------------------------------- |
+| `--main-path`            | Root report card directory (e.g. RC13_RC2023_24_Gold)            |
+| `--model-results-prefix` | Folder containing Source/OpenWater model outputs                 |
+| `--output-root`          | Output report bundle directory                                   |
+| `--regions`              | Regions to process                                               |
+| `--constituents`         | Constituents to include                                          |
+| `--units`                | `report` or `raw`                                                |
+| `--process-model`        | Scenario used for process summaries (`BASE`, `PREDEV`, `CHANGE`) |
+
+---
+
+### Skip Options
+
+Individual workflow components can be disabled to reduce runtime.
+
+| Option                              | Skips                                      |
+| ----------------------------------- | ------------------------------------------ |
+| `--skip-region`                     | Region summaries                           |
+| `--skip-basin`                      | Basin summaries                            |
+| `--skip-subcatchment`               | Subcatchment summaries                     |
+| `--skip-landuse`                    | Land-use summaries                         |
+| `--skip-source-sink`                | Source–sink summaries                      |
+| `--skip-sankey`                     | Sankey diagram generation                  |
+| `--skip-fu-load`                    | Functional Unit load summaries             |
+| `--skip-process-plots`              | Process contribution plots                 |
+| `--skip-change-plots`               | Change summary plots                       |
+| `--skip-modelled-vs-measured`       | Modelled-vs-measured statistics and tables |
+| `--skip-modelled-vs-measured-plots` | Modelled-vs-measured PNG plots             |
+| `--skip-rsdr`                       | RSDR shapefile and CSV exports             |
+| `--no-excel`                        | Disable Excel workbook generation          |
+| `--fail-fast`                       | Stop immediately if any workflow fails     |
+
+---
+
+### Example: Change Summary Plots Only
+
+```bash
+python scripts/run_report_card_summary.py ^
+  --main-path F:\RC13_RC2023_24_Gold ^
+  --model-results-prefix Gold_ResultsSets_PointOfTruth ^
+  --output-root F:\RC13_RC2023_24_Gold\change_plots ^
+  --regions CY,WT,BU,MW,FI,BM ^
+  --constituents FS,PN,PP,DIN,DON,DIP,DOP ^
+  --units report ^
+  --process-model BASE ^
+  --skip-region ^
+  --skip-basin ^
+  --skip-subcatchment ^
+  --skip-landuse ^
+  --skip-source-sink ^
+  --skip-sankey ^
+  --skip-fu-load ^
+  --skip-process-plots ^
+  --skip-modelled-vs-measured ^
+  --skip-modelled-vs-measured-plots ^
+  --skip-rsdr ^
+  --no-excel
 ```
 
 ---
 
-## Run Basin Summary
+### Example: RSDR Export Only
+
+```bash
+python scripts/run_report_card_summary.py ^
+  --main-path F:\RC13_RC2023_24_Gold ^
+  --model-results-prefix Gold_ResultsSets_PointOfTruth ^
+  --output-root F:\RC13_RC2023_24_Gold\rsdr_exports ^
+  --regions CY,WT,BU,MW,FI,BM ^
+  --constituents FS,PN,PP,DIN,DON,DIP,DOP ^
+  --units report ^
+  --process-model BASE ^
+  --skip-region ^
+  --skip-basin ^
+  --skip-subcatchment ^
+  --skip-landuse ^
+  --skip-source-sink ^
+  --skip-sankey ^
+  --skip-fu-load ^
+  --skip-process-plots ^
+  --skip-change-plots ^
+  --skip-modelled-vs-measured ^
+  --skip-modelled-vs-measured-plots
+```
+
+---
+
+### Example: Fast Summary Run
+
+Generate only the core report card tables:
+
+```bash
+python scripts/run_report_card_summary.py ^
+  --main-path F:\RC13_RC2023_24_Gold ^
+  --model-results-prefix Gold_ResultsSets_PointOfTruth ^
+  --output-root F:\RC13_RC2023_24_Gold\report_card_summary ^
+  --regions CY,WT,BU,MW,FI,BM ^
+  --constituents FS,PN,PP,DIN,DON,DIP,DOP ^
+  --units report ^
+  --process-model BASE ^
+  --skip-sankey ^
+  --skip-process-plots ^
+  --skip-change-plots ^
+  --skip-modelled-vs-measured ^
+  --skip-modelled-vs-measured-plots ^
+  --skip-rsdr
+```
+
+---
+
+## Basin Summary
 
 ```bash
 python scripts/run_basin_summary.py
@@ -232,7 +531,7 @@ python scripts/run_basin_summary.py
 
 ---
 
-## Run Source–Sink Summary
+## Source–Sink Summary
 
 ```bash
 python scripts/run_source_sink_summary.py
@@ -240,10 +539,31 @@ python scripts/run_source_sink_summary.py
 
 ---
 
-## Generate Sankey Diagrams
+## Sankey Generation
 
 ```bash
 python scripts/run_source_sink_sankey_for_basin.py
+```
+
+---
+
+# Report Card Bundle Outputs
+
+A full report-card bundle may generate:
+
+```text
+01_report_card_summary
+02_region_summary
+03_basin_summary
+04_subcatchment_summary
+05_landuse_summary
+06_source_sink_summary
+07_source_sink_sankey
+08_fu_load_summary
+09_process_contribution_summary
+10_change_summary_plots
+11_modelled_vs_measured
+12_rsdr_shapefiles
 ```
 
 ---
@@ -255,13 +575,14 @@ python scripts/run_source_sink_sankey_for_basin.py
 | Constituent | Unit    |
 | ----------- | ------- |
 | FS          | kt/year |
+| CS          | kt/year |
 | Others      | t/year  |
 
 ---
 
-## Raw Units
+## Internal Units
 
-Internal calculations are generally stored as:
+Internal calculations generally use:
 
 ```text
 kg
@@ -269,39 +590,21 @@ kg/year
 kg/ha/year
 ```
 
-Unit conversions are handled automatically via:
-
-```python
-apply_units()
-label_for_units()
-```
+Unit conversion is handled automatically.
 
 ---
 
-# Basin Scales
-
-Supported aggregation scales:
-
-| Alias              | Actual Column |
-| ------------------ | ------------- |
-| 35                 | Basin_35      |
-| Basin_35           | Basin_35      |
-| 48                 | Manag_Unit_48 |
-| MU_48              | Manag_Unit_48 |
-| management_unit_48 | Manag_Unit_48 |
-
----
-
-# Key Data Sources
+# Key Input Files
 
 Typical required files include:
 
-* `RegContributorDataGrid.csv`
-* `fuAreasTable.csv`
-* `ParameterTable.csv`
-* Climate tables
-* Regional lookup tables
-* GBR Phase 4 shapefiles
+```text
+RegContributorDataGrid.csv
+RawResults.csv
+RegionalSourceSinkSummaryTable.csv
+fuAreasTable.csv
+ParameterTable.csv
+```
 
 ---
 
@@ -313,38 +616,10 @@ Generated outputs include:
 * Excel workbooks
 * PNG plots
 * Sankey diagrams
+* Shapefiles
+* GeoPackages
 * QA summaries
 * Metadata tables
-
----
-
-# Example Outputs
-
-## Functional Unit Summary
-
-* Regional load contributions
-* Areal loading rates
-* GBR-wide comparisons
-
----
-
-## Source–Sink Summary
-
-* Generated load
-* Delivered load
-* Export load
-* Internal retention
-* Process contribution breakdowns
-
----
-
-## Sankey Plots
-
-Visualisation of:
-
-```text
-Source → Delivery → Retention → Export
-```
 
 ---
 
@@ -353,44 +628,27 @@ Source → Delivery → Retention → Export
 The package is designed for:
 
 * RC13 / RC2023–25 workflows
-* OpenWater + Source interoperability
+* Source and OpenWater interoperability
 * Large-scale batch processing
 * Reproducible reporting
-* QA-ready exports
+* Automated QA workflows
+* Operational Reef Report Card production
 
 ---
 
 # Future Improvements
 
-Planned enhancements include:
+Potential future enhancements:
 
 * Parallel processing
 * Interactive dashboards
-* GeoPackage export support
+* Direct NetCDF readers
 * Additional QA automation
 * Improved plotting themes
-* NetCDF direct readers
+* Cloud-ready workflows
 
 ---
 
-# Acknowledgements
-
-This workflow builds upon modelling and analysis approaches developed across:
-
-* Queensland Government
-* eWater
-* Flow Matters
-* Great Barrier Reef report card workflows
-* Paddock-to-Reef program workflows
-
----
-
-# Related Projects
-
-* [https://github.com/flowmatters/openwater](https://github.com/flowmatters/openwater)
-* [https://github.com/flowmatters/dsed-py](https://github.com/flowmatters/dsed-py)
-* [https://github.com/flowmatters/veneer-py](https://github.com/flowmatters/veneer-py)
-* [https://github.com/flowmatters/hydrograph-py](https://github.com/flowmatters/hydrograph-py)
 
 ---
 
@@ -404,12 +662,12 @@ MIT License
 
 Maintainer: Shuci Liu
 
-GitHub Repository:
+Repository:
 
-[https://github.com/liushuci/gbr-source-summary](https://github.com/liushuci/gbr-source-summary)
+https://github.com/liushuci/gbr-source-summary
 
 ---
 
 # Citation
 
-If using this package in reports or publications, please cite the repository and associated GBR modelling workflows.
+If using this package in reports, publications, or operational reporting workflows, please cite the repository and associated GBR modelling workflows.
